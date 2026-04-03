@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { db, auth } from '../firebase'
+import { db } from '../firebase'
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
 
 export default function AdminRestaurantes() {
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', slug: '', ownerEmail: '', ownerPassword: '' })
+  const [form, setForm] = useState({ name: '', slug: '' })
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
@@ -60,47 +59,7 @@ export default function AdminRestaurantes() {
         updatedAt: new Date().toISOString()
       })
 
-      // Create user account if email provided
-      if (form.ownerEmail && form.ownerPassword) {
-        try {
-          // Save current user reference
-          const currentUser = auth.currentUser
-
-          // Create the new user
-          const userCredential = await createUserWithEmailAndPassword(auth, form.ownerEmail, form.ownerPassword)
-
-          // Create user doc
-          await setDoc(doc(db, 'users', userCredential.user.uid), {
-            email: form.ownerEmail,
-            role: 'client',
-            restaurantSlug: form.slug,
-            displayName: form.name,
-            createdAt: new Date().toISOString()
-          })
-
-          // Update restaurant with owner
-          await setDoc(doc(db, 'restaurants', form.slug), {
-            name: form.name,
-            slug: form.slug,
-            ownerId: userCredential.user.uid,
-            createdAt: new Date().toISOString()
-          })
-
-          // Note: creating a user with createUserWithEmailAndPassword signs in as that user
-          // The admin will need to re-login. We show a notice.
-          alert('Restaurante e conta criados! Você será redirecionado para o login pois a criação de conta troca o usuário ativo.')
-          window.location.href = '/clientes-admin/login'
-          return
-        } catch (authErr) {
-          if (authErr.code === 'auth/email-already-in-use') {
-            setError('Este email já está em uso. O restaurante foi criado, mas sem conta de acesso.')
-          } else {
-            setError('Erro ao criar conta: ' + authErr.message)
-          }
-        }
-      }
-
-      setForm({ name: '', slug: '', ownerEmail: '', ownerPassword: '' })
+      setForm({ name: '', slug: '' })
       setShowForm(false)
       loadRestaurants()
     } catch (err) {
@@ -140,12 +99,20 @@ export default function AdminRestaurantes() {
           </Link>
           <h1 className="text-xl font-bold text-slate-800">Gerenciar Restaurantes</h1>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="text-sm bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl transition font-medium"
-        >
-          {showForm ? 'Cancelar' : '+ Novo'}
-        </button>
+        <div className="flex gap-2">
+          <Link
+            to="/admin/usuarios"
+            className="text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl transition font-medium"
+          >
+            Usuários
+          </Link>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="text-sm bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl transition font-medium"
+          >
+            {showForm ? 'Cancelar' : '+ Novo'}
+          </button>
+        </div>
       </div>
 
       {/* Create Form */}
@@ -179,31 +146,7 @@ export default function AdminRestaurantes() {
             />
           </div>
 
-          <div className="border-t border-slate-100 pt-4">
-            <p className="text-xs text-slate-400 mb-3">Conta de acesso do cliente (opcional — pode criar depois)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Email do cliente</label>
-                <input
-                  type="email"
-                  value={form.ownerEmail}
-                  onChange={e => setForm(prev => ({ ...prev, ownerEmail: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-amber-500 outline-none"
-                  placeholder="cliente@email.com"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Senha inicial</label>
-                <input
-                  type="text"
-                  value={form.ownerPassword}
-                  onChange={e => setForm(prev => ({ ...prev, ownerPassword: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-amber-500 outline-none"
-                  placeholder="senha123"
-                />
-              </div>
-            </div>
-          </div>
+          <p className="text-xs text-slate-400">Para criar conta de acesso, use a página <Link to="/admin/usuarios" className="text-amber-600 underline">Usuários</Link> após criar o restaurante.</p>
 
           <button
             type="submit"

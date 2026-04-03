@@ -12,23 +12,30 @@ function ItemEditor({ item, onChange, onRemove }) {
   return (
     <div className="bg-slate-50 rounded-xl p-3 space-y-2">
       <div className="flex items-start gap-2">
-        <div className="flex-1 space-y-2">
-          <input
-            type="text"
-            value={item.nome}
-            onChange={e => onChange({ ...item, nome: e.target.value })}
-            placeholder="Nome do item"
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 outline-none"
-          />
-          <div className="flex gap-2">
-            <textarea
-              value={item.desc || ''}
-              onChange={e => onChange({ ...item, desc: e.target.value })}
-              placeholder="Descrição (opcional)"
-              rows={2}
-              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 outline-none resize-none"
+        <div className="flex-1 space-y-3">
+          <div>
+            <label className="block text-[11px] font-medium text-slate-500 mb-1">Nome do prato / item</label>
+            <input
+              type="text"
+              value={item.nome}
+              onChange={e => onChange({ ...item, nome: e.target.value })}
+              placeholder="Ex: Filé Mignon ao Molho de Cogumelos"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 outline-none"
             />
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-[11px] font-medium text-slate-500 mb-1">Descrição do prato (opcional)</label>
+              <textarea
+                value={item.desc || ''}
+                onChange={e => onChange({ ...item, desc: e.target.value })}
+                placeholder="Ingredientes, modo de preparo, acompanhamentos..."
+                rows={2}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 outline-none resize-none"
+              />
+            </div>
             <div className="shrink-0 w-24">
+              <label className="block text-[11px] font-medium text-slate-500 mb-1">Preço</label>
               <div className="relative">
                 <span className="absolute left-2.5 top-2 text-xs text-slate-400">R$</span>
                 <input
@@ -41,7 +48,7 @@ function ItemEditor({ item, onChange, onRemove }) {
                   className="w-full pl-8 pr-2 py-2 rounded-lg border border-slate-200 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 outline-none text-right"
                 />
               </div>
-              <span className="text-[10px] text-slate-400 block text-center mt-0.5">Preço</span>
+              <span className="text-[10px] text-slate-400 block text-center mt-0.5">Deixe vazio para ocultar</span>
             </div>
           </div>
         </div>
@@ -97,7 +104,7 @@ function CategoryEditor({ category, onChange, onRemove }) {
             value={category.titulo}
             onChange={e => { e.stopPropagation(); onChange({ ...category, titulo: e.target.value }) }}
             onClick={e => e.stopPropagation()}
-            placeholder="Nome da categoria"
+            placeholder="Ex: Entradas, Massas, Carnes..."
             className="font-semibold text-slate-800 bg-transparent border-none outline-none w-full text-base"
           />
         </div>
@@ -133,13 +140,16 @@ function CategoryEditor({ category, onChange, onRemove }) {
           </button>
 
           {/* Nota */}
-          <input
-            type="text"
-            value={category.nota || ''}
-            onChange={e => onChange({ ...category, nota: e.target.value })}
-            placeholder="Observação da categoria (opcional)"
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs text-slate-500 italic focus:border-amber-500 outline-none"
-          />
+          <div>
+            <label className="block text-[11px] font-medium text-slate-400 mb-1">Observação da categoria (aparece no final, ex: "*Consulte o garçom")</label>
+            <input
+              type="text"
+              value={category.nota || ''}
+              onChange={e => onChange({ ...category, nota: e.target.value })}
+              placeholder="Ex: *Todas as massas podem ser sem glúten ou integral"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs text-slate-500 italic focus:border-amber-500 outline-none"
+            />
+          </div>
         </div>
       )}
     </div>
@@ -328,11 +338,12 @@ export default function CardapioEditor() {
         <div>
           {/* Tab settings */}
           <div className="flex items-center gap-3 mb-4 bg-white rounded-xl p-3 border border-slate-200">
-            <label className="text-xs text-slate-500 shrink-0">Nome da aba:</label>
+            <label className="text-xs text-slate-500 shrink-0">Nome da aba (aparece no menu de navegação):</label>
             <input
               type="text"
               value={tabs[activeTab].label}
               onChange={e => updateTabLabel(activeTab, e.target.value)}
+              placeholder="Ex: Entradas, Massas, Drinks..."
               className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:border-amber-500 outline-none"
             />
             <button
