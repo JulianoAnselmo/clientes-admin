@@ -23,12 +23,14 @@ export default function Dashboard() {
           }
         }
       } catch (err) {
-        console.error('Erro ao carregar restaurantes:', err)
+        console.error('Erro ao carregar:', err)
       }
       setLoading(false)
     }
     if (userData) load()
   }, [userData, isAdmin])
+
+  const isGaragem = (r) => r.type === 'garagem'
 
   if (loading) {
     return (
@@ -42,7 +44,7 @@ export default function Dashboard() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-slate-800">
-          {isAdmin ? 'Todos os Restaurantes' : 'Meu Restaurante'}
+          {isAdmin ? 'Todos os Clientes' : 'Meu Painel'}
         </h1>
         {isAdmin && (
           <Link
@@ -56,28 +58,52 @@ export default function Dashboard() {
 
       {restaurants.length === 0 ? (
         <div className="text-center py-20 text-slate-400">
-          <p className="text-lg">Nenhum restaurante encontrado</p>
-          {isAdmin && <p className="text-sm mt-1">Crie um novo restaurante para comecar</p>}
+          <p className="text-lg">Nenhum cliente encontrado</p>
+          {isAdmin && <p className="text-sm mt-1">Crie um novo cliente para comecar</p>}
         </div>
       ) : (
         <div className="grid gap-4">
           {restaurants.map(r => (
             <div key={r.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-              <h2 className="font-semibold text-lg text-slate-800 mb-3">{r.name}</h2>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="font-semibold text-lg text-slate-800">{r.name}</h2>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isGaragem(r) ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
+                  {isGaragem(r) ? '🚗 Garagem' : '🍽️ Restaurante'}
+                </span>
+              </div>
               <p className="text-xs text-slate-400 mb-4">/{r.slug}</p>
               <div className="flex gap-3">
-                <Link
-                  to={`/restaurante/${r.slug}/cardapio`}
-                  className="flex-1 text-center py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-sm font-medium transition"
-                >
-                  Cardapio
-                </Link>
-                <Link
-                  to={`/restaurante/${r.slug}/promocoes`}
-                  className="flex-1 text-center py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-sm font-medium transition"
-                >
-                  Promocoes
-                </Link>
+                {isGaragem(r) ? (
+                  <>
+                    <Link
+                      to={`/restaurante/${r.slug}/veiculos`}
+                      className="flex-1 text-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-sm font-medium transition"
+                    >
+                      Veículos
+                    </Link>
+                    <Link
+                      to={`/restaurante/${r.slug}/info`}
+                      className="flex-1 text-center py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl text-sm font-medium transition"
+                    >
+                      Informações
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to={`/restaurante/${r.slug}/cardapio`}
+                      className="flex-1 text-center py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-sm font-medium transition"
+                    >
+                      Cardapio
+                    </Link>
+                    <Link
+                      to={`/restaurante/${r.slug}/promocoes`}
+                      className="flex-1 text-center py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-sm font-medium transition"
+                    >
+                      Promocoes
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           ))}
