@@ -31,6 +31,7 @@ export default function Dashboard() {
   }, [userData, isAdmin])
 
   const isGaragem = (r) => r.type === 'garagem'
+  const isRoupas = (r) => r.type === 'roupas'
 
   if (loading) {
     return (
@@ -67,8 +68,8 @@ export default function Dashboard() {
             <div key={r.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
               <div className="flex items-center gap-2 mb-3">
                 <h2 className="font-semibold text-lg text-slate-800">{r.name}</h2>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isGaragem(r) ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
-                  {isGaragem(r) ? '🚗 Garagem' : '🍽️ Restaurante'}
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isGaragem(r) ? 'bg-blue-50 text-blue-700' : isRoupas(r) ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>
+                  {isGaragem(r) ? '🚗 Garagem' : isRoupas(r) ? '👔 Roupas' : '🍽️ Restaurante'}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mb-4">/{r.slug}</p>
@@ -80,6 +81,21 @@ export default function Dashboard() {
                       className="flex-1 text-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-sm font-medium transition"
                     >
                       Veículos
+                    </Link>
+                    <Link
+                      to={`/restaurante/${r.slug}/info`}
+                      className="flex-1 text-center py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl text-sm font-medium transition"
+                    >
+                      Informações
+                    </Link>
+                  </>
+                ) : isRoupas(r) ? (
+                  <>
+                    <Link
+                      to={`/restaurante/${r.slug}/roupas`}
+                      className="flex-1 text-center py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-sm font-medium transition"
+                    >
+                      Catálogo
                     </Link>
                     <Link
                       to={`/restaurante/${r.slug}/info`}

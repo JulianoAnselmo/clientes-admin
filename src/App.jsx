@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import CardapioEditor from './pages/CardapioEditor'
 import PromocoesEditor from './pages/PromocoesEditor'
 import VeiculosEditor from './pages/VeiculosEditor'
+import RoupasEditor from './pages/RoupasEditor'
 import BusinessInfoEditor from './pages/BusinessInfoEditor'
 import AdminRestaurantes from './pages/AdminRestaurantes'
 import AdminUsuarios from './pages/AdminUsuarios'
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/restaurante/:slug/cardapio" element={<CardapioEditor />} />
           <Route path="/restaurante/:slug/promocoes" element={<PromocoesEditor />} />
           <Route path="/restaurante/:slug/veiculos" element={<VeiculosEditor />} />
+          <Route path="/restaurante/:slug/roupas" element={<RoupasEditor />} />
           <Route path="/restaurante/:slug/info" element={<BusinessInfoEditor />} />
           <Route path="/admin/restaurantes" element={<ProtectedRoute adminOnly><AdminRestaurantes /></ProtectedRoute>} />
           <Route path="/admin/usuarios" element={<ProtectedRoute adminOnly><AdminUsuarios /></ProtectedRoute>} />

@@ -73,6 +73,32 @@ export default function AdminRestaurantes() {
           },
           updatedAt: new Date().toISOString()
         })
+      } else if (form.type === 'roupas') {
+        await setDoc(doc(db, 'restaurants', form.slug, 'data', 'roupas'), {
+          content: [],
+          updatedAt: new Date().toISOString()
+        })
+        await setDoc(doc(db, 'restaurants', form.slug, 'data', 'businessInfo'), {
+          content: {
+            name: form.name,
+            city: '',
+            slogan: '',
+            tagline: 'Moda Masculina Premium',
+            whatsapp: '',
+            whatsappNumber: '',
+            phone: '',
+            address: '',
+            neighborhood: '',
+            cityState: '',
+            cep: '',
+            hours: { weekdays: '', saturday: '' },
+            instagram: '',
+            facebook: '',
+            googleMapsEmbed: '',
+            googleMapsLink: ''
+          },
+          updatedAt: new Date().toISOString()
+        })
       } else {
         // Initialize empty cardapio and promocoes (existing behavior)
         await setDoc(doc(db, 'restaurants', form.slug, 'data', 'cardapio'), {
@@ -103,6 +129,9 @@ export default function AdminRestaurantes() {
       if (type === 'garagem') {
         await deleteDoc(doc(db, 'restaurants', slug, 'data', 'veiculos'))
         await deleteDoc(doc(db, 'restaurants', slug, 'data', 'businessInfo'))
+      } else if (type === 'roupas') {
+        await deleteDoc(doc(db, 'restaurants', slug, 'data', 'roupas'))
+        await deleteDoc(doc(db, 'restaurants', slug, 'data', 'businessInfo'))
       } else {
         await deleteDoc(doc(db, 'restaurants', slug, 'data', 'cardapio'))
         await deleteDoc(doc(db, 'restaurants', slug, 'data', 'promocoes'))
@@ -116,10 +145,13 @@ export default function AdminRestaurantes() {
 
   // Helpers de tipo
   const isGaragem = (r) => r.type === 'garagem'
-  const typeLabel = (r) => isGaragem(r) ? 'Garagem' : 'Restaurante'
+  const isRoupas = (r) => r.type === 'roupas'
+  const typeLabel = (r) => isGaragem(r) ? 'Garagem' : isRoupas(r) ? 'Roupas' : 'Restaurante'
   const typeBadgeClass = (r) => isGaragem(r)
     ? 'bg-blue-50 text-blue-700'
-    : 'bg-amber-50 text-amber-700'
+    : isRoupas(r)
+      ? 'bg-rose-50 text-rose-700'
+      : 'bg-amber-50 text-amber-700'
 
   if (loading) {
     return (
@@ -195,6 +227,13 @@ export default function AdminRestaurantes() {
                   <p className="text-[11px] text-slate-400">Veículos e informações</p>
                 </div>
               </label>
+              <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${form.type === 'roupas' ? 'border-rose-500 bg-rose-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                <input type="radio" name="type" value="roupas" checked={form.type === 'roupas'} onChange={e => setForm(prev => ({ ...prev, type: e.target.value }))} className="accent-rose-500" />
+                <div>
+                  <span className="text-sm font-medium text-slate-800">👔 Loja de Roupas</span>
+                  <p className="text-[11px] text-slate-400">Catálogo e informações</p>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -257,6 +296,21 @@ export default function AdminRestaurantes() {
                     className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
                   >
                     Veículos
+                  </Link>
+                  <Link
+                    to={`/restaurante/${r.slug}/info`}
+                    className="text-xs px-3 py-1.5 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition"
+                  >
+                    Informações
+                  </Link>
+                </>
+              ) : isRoupas(r) ? (
+                <>
+                  <Link
+                    to={`/restaurante/${r.slug}/roupas`}
+                    className="text-xs px-3 py-1.5 bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition"
+                  >
+                    Catálogo
                   </Link>
                   <Link
                     to={`/restaurante/${r.slug}/info`}
