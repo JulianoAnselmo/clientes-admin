@@ -543,150 +543,161 @@ export default function GestaoClientesPage() {
         {restaurants.length === 0 ? (
           <div className="py-16 text-center text-slate-400 text-sm">Nenhum cliente cadastrado</div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+          <div className="divide-y divide-slate-100">
             {restaurants.map(r => {
               const c = contracts[r.slug]
               const hasContract = !!c
               const ps = paymentStatus(c)
               const isCurrentPaid = thisMonthRecord(c)?.paid
-              const borderColor =
-                ps === 'overdue' ? 'border-l-4 border-red-400' :
-                ps === 'due-soon' ? 'border-l-4 border-yellow-400' : ''
 
               return (
-                <div key={r.slug} className={`bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition overflow-hidden ${borderColor}`}>
-                  {/* Card Header */}
-                  <div className="px-5 py-4 flex items-start justify-between border-b border-slate-100">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-slate-800">{r.name}</span>
-                        {hasContract && <StatusBadge status={c.status} />}
+                <div key={r.slug} className="px-6 py-5 hover:bg-slate-50/50 transition">
+                  {/* Row 1: Name + Value + Quick Actions */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      {/* Status indicator dot */}
+                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                        ps === 'overdue' ? 'bg-red-500' :
+                        ps === 'due-soon' ? 'bg-yellow-500' :
+                        ps === 'paid' ? 'bg-green-500' :
+                        hasContract && c.status === 'active' ? 'bg-emerald-400' :
+                        hasContract && c.status === 'suspended' ? 'bg-yellow-400' :
+                        hasContract && c.status === 'cancelled' ? 'bg-red-400' :
+                        'bg-slate-300'
+                      }`} title={
+                        ps === 'overdue' ? 'Pagamento vencido' :
+                        ps === 'due-soon' ? 'Vence em breve' :
+                        ps === 'paid' ? 'Pago' : c?.status || 'Sem contrato'
+                      } />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800">{r.name}</span>
+                          {hasContract && <StatusBadge status={c.status} />}
+                        </div>
+                        {hasContract && c.domain && (
+                          <p className="text-xs text-slate-400 mt-0.5">{c.domain}</p>
+                        )}
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">{r.slug}</p>
-                      {c?.notes && (
-                        <p className="text-xs text-slate-400 mt-1 truncate max-w-[250px]" title={c.notes}>
-                          📝 {c.notes}
-                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      {hasContract && (
+                        <div className="text-right">
+                          <span className="text-base font-bold text-slate-800">{brl.format(c.contractValue)}</span>
+                          <span className="text-[10px] text-slate-400 ml-1">/mês</span>
+                        </div>
                       )}
                     </div>
-                    {hasContract && (
-                      <div className="text-right flex-shrink-0 ml-4">
-                        <span className="text-lg font-bold text-slate-800">{brl.format(c.contractValue)}</span>
-                        <p className="text-[10px] text-slate-400">por mês</p>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Card Body — Info Grid */}
+                  {/* Row 2: Info pills */}
                   {hasContract && (
-                    <div className="px-5 py-3 grid grid-cols-3 gap-3 border-b border-slate-100">
+                    <div className="flex items-center gap-3 mb-3 flex-wrap">
                       {/* Pagamento */}
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Pagamento</p>
+                      <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-3 py-1.5">
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold">Pgto</span>
                         <PaymentBadge contract={c} />
-                        <p className="text-[10px] text-slate-400 mt-1">dia {c.paymentDay}</p>
+                        <span className="text-[10px] text-slate-400">dia {c.paymentDay}</span>
                       </div>
 
                       {/* Domínio */}
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Domínio</p>
-                        {c.domain ? (
-                          <>
-                            <p className="text-xs text-slate-700 font-medium truncate">{c.domain}</p>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <DomainBadge contract={c} />
-                              {c.domainRenewal && (
-                                <span className="text-[10px] text-slate-400">
-                                  {new Date(c.domainRenewal).toLocaleDateString('pt-BR')}
-                                </span>
-                              )}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
+                      {c.domain && c.domainRenewal && (
+                        <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-3 py-1.5">
+                          <span className="text-[10px] text-slate-400 uppercase font-semibold">Domínio</span>
+                          <DomainBadge contract={c} />
+                          <span className="text-[10px] text-slate-400">
+                            renova {new Date(c.domainRenewal).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Contrato */}
+                      <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-3 py-1.5">
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold">Contrato</span>
+                        <ContractDuration contract={c} />
+                        {c.contractStart && (
+                          <span className="text-[10px] text-slate-400">
+                            desde {new Date(c.contractStart).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                          </span>
                         )}
                       </div>
 
-                      {/* Contrato */}
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Contrato</p>
-                        <ContractDuration contract={c} />
-                        {c.contractStart && (
-                          <p className="text-[10px] text-slate-400 mt-0.5">
-                            desde {new Date(c.contractStart).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
-                          </p>
-                        )}
-                      </div>
+                      {/* Notes */}
+                      {c.notes && (
+                        <span className="text-[10px] text-slate-400 truncate max-w-[200px]" title={c.notes}>
+                          📝 {c.notes}
+                        </span>
+                      )}
                     </div>
                   )}
 
-                  {/* Card Footer — Actions */}
-                  <div className="px-5 py-3 flex items-center gap-1.5 flex-wrap">
-                    {/* Marcar como pago */}
+                  {/* Row 3: Actions */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {!hasContract && (
+                      <button
+                        onClick={() => openEditModal(r.slug)}
+                        className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg transition font-medium"
+                      >
+                        ⚙️ Configurar contrato
+                      </button>
+                    )}
+
                     {hasContract && !isCurrentPaid && (
                       <button
                         onClick={() => handleMarkPaid(r.slug, currentMonth(), true)}
-                        title="Marcar como pago este mês"
-                        className="text-xs bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2.5 py-1.5 rounded-lg transition font-medium"
+                        className="text-xs bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg transition font-medium"
                       >
-                        ✓ Pago
+                        ✓ Marcar como pago
                       </button>
                     )}
 
-                    {/* Histórico */}
                     {hasContract && (
                       <button
                         onClick={() => setHistorySlug(r.slug)}
-                        title="Histórico de pagamentos"
-                        className="text-xs bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-1.5 rounded-lg transition"
+                        className="text-xs bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg transition"
                       >
-                        📋 Histórico
+                        📋 Pagamentos
                       </button>
                     )}
 
-                    {/* Editar / Configurar */}
-                    <button
-                      onClick={() => openEditModal(r.slug)}
-                      title={hasContract ? 'Editar contrato' : 'Configurar contrato'}
-                      className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-1.5 rounded-lg transition font-medium"
-                    >
-                      {hasContract ? '✏️ Editar' : '⚙️ Configurar'}
-                    </button>
+                    {hasContract && (
+                      <button
+                        onClick={() => openEditModal(r.slug)}
+                        className="text-xs bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg transition"
+                      >
+                        ✏️ Contrato
+                      </button>
+                    )}
 
-                    {/* Relatório SEO */}
                     {hasContract && c.siteUrl && (
                       <button
                         onClick={() => navigate(`/admin/relatorio-seo/${r.slug}`)}
-                        title="Gerar Relatório SEO"
-                        className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-2.5 py-1.5 rounded-lg transition font-medium"
+                        className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-3 py-1.5 rounded-lg transition font-medium"
                       >
-                        📊 SEO
+                        📊 Relatório SEO
                       </button>
                     )}
 
-                    {/* Spacer */}
                     <div className="flex-1" />
 
-                    {/* WhatsApp */}
                     {hasContract && (
                       <a
                         href={whatsappLink('', r.name, c.contractValue, c.paymentDay)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title="Enviar lembrete por WhatsApp"
-                        className="text-xs bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2.5 py-1.5 rounded-lg transition"
+                        title="Lembrete via WhatsApp"
+                        className="text-xs bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 w-8 h-8 rounded-lg transition flex items-center justify-center"
                       >
                         💬
                       </a>
                     )}
 
-                    {/* Link painel do cliente */}
                     <a
                       href={`/restaurante/${r.slug}/${r.type === 'garagem' ? 'veiculos' : r.type === 'roupas' ? 'roupas' : r.type === 'outros' ? 'info' : 'cardapio'}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Abrir painel do cliente"
-                      className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg transition"
+                      className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 w-8 h-8 rounded-lg transition flex items-center justify-center"
                     >
                       🔗
                     </a>
