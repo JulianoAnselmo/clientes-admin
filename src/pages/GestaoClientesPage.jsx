@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore'
+import { collection, getDocs, doc, setDoc, getDoc } from 'firebase/firestore'
+import { useNavigate } from 'react-router-dom'
 import { db } from '../firebase'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -342,6 +343,19 @@ function EditContractModal({ restaurant, form, onChange, onSave, onClose, saving
             </label>
           </div>
 
+          {/* Search Console */}
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 pt-2">Google Search Console</p>
+          <label className="block">
+            <span className="text-sm text-slate-600 mb-1 block">Site URL (Search Console)</span>
+            <input
+              type="text" placeholder="https://exemplo.com.br/ ou sc-domain:exemplo.com.br"
+              value={form.siteUrl || ''}
+              onChange={e => onChange('siteUrl', e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">URL exata como aparece no Google Search Console</p>
+          </label>
+
           {/* Notas */}
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 pt-2">Notas</p>
           <textarea
@@ -378,6 +392,7 @@ function EditContractModal({ restaurant, form, onChange, onSave, onClose, saving
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function GestaoClientesPage() {
+  const navigate = useNavigate()
   const [restaurants, setRestaurants] = useState([])
   const [contracts, setContracts]     = useState({})
   const [loading, setLoading]         = useState(true)
@@ -636,6 +651,17 @@ export default function GestaoClientesPage() {
                     >
                       {hasContract ? '✏️ Editar' : '⚙️ Configurar'}
                     </button>
+
+                    {/* Relatório SEO */}
+                    {hasContract && c.siteUrl && (
+                      <button
+                        onClick={() => navigate(`/admin/relatorio-seo/${r.slug}`)}
+                        title="Gerar Relatório SEO"
+                        className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-2.5 py-1.5 rounded-lg transition font-medium"
+                      >
+                        📊 SEO
+                      </button>
+                    )}
 
                     {/* WhatsApp */}
                     {hasContract && (

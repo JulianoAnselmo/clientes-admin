@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head><title>Autenticação Google</title></head>
+<body>
+<p>Autenticando...</p>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (code && window.opener) {
+    window.opener.postMessage({ code }, window.location.origin);
+    window.close();
+  } else {
+    document.body.innerHTML = '<p>Erro na autenticação. Feche esta janela e tente novamente.</p>';
+  }
+</script>
+</body>
+</html>

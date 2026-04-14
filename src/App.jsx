@@ -11,6 +11,7 @@ import BusinessInfoEditor from './pages/BusinessInfoEditor'
 import AdminRestaurantes from './pages/AdminRestaurantes'
 import AdminUsuarios from './pages/AdminUsuarios'
 import GestaoClientesPage from './pages/GestaoClientesPage'
+import RelatorioSEOPage from './pages/RelatorioSEOPage'
 import Layout from './components/Layout'
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/admin/restaurantes" element={<ProtectedRoute adminOnly><AdminRestaurantes /></ProtectedRoute>} />
           <Route path="/admin/usuarios" element={<ProtectedRoute adminOnly><AdminUsuarios /></ProtectedRoute>} />
           <Route path="/admin/gestao" element={<ProtectedRoute adminOnly><GestaoClientesPage /></ProtectedRoute>} />
+          <Route path="/admin/relatorio-seo/:slug" element={<ProtectedRoute adminOnly><RelatorioSEOPage /></ProtectedRoute>} />
         </Route>
       </Routes>
     </AuthProvider>

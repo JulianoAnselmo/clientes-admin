@@ -12,6 +12,16 @@ service cloud.firestore {
       }
     }
 
+    // Contratos — somente autenticados
+    match /contracts/{slug} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Configurações (tokens OAuth, etc.) — somente autenticados
+    match /settings/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
     // Usuários — somente autenticados
     match /users/{userId} {
       allow read, write: if request.auth != null;
