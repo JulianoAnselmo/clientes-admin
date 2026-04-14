@@ -22,9 +22,8 @@ function formatPosition(n) {
 
 function last30Days() {
   const end = new Date()
-  end.setDate(end.getDate() - 3) // GSC data has ~3 day delay
   const start = new Date(end)
-  start.setDate(start.getDate() - 30)
+  start.setMonth(start.getMonth() - 1)
   return {
     startDate: start.toISOString().slice(0, 10),
     endDate: end.toISOString().slice(0, 10),
