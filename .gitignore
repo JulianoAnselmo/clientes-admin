@@ -22,3 +22,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment
+.env*
+
+# Firebase service account credentials — NEVER commitar
+serviceAccount*.json
+
+# Scripts one-time / admin (referenciam credenciais locais)
+migrate.js
+setAdminUser.js
+scripts/seed-veiculos.mjs
+
+# Claude Code local config
+.claude/
+

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { db } from '../firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 
@@ -7,7 +7,7 @@ const defaultInfo = {
   name: '',
   city: '',
   slogan: '',
-  tagline: 'Compra, Venda, Troca e Financiamento de Veículos',
+  tagline: '',
   whatsapp: '',
   whatsappNumber: '',
   phone: '',
@@ -15,7 +15,12 @@ const defaultInfo = {
   neighborhood: '',
   cityState: '',
   cep: '',
-  hours: { weekdays: '', saturday: '' },
+  hours: {
+    funcionamento: '',
+    jantar: '',
+    almoco: '',
+    completo: '',
+  },
   instagram: '',
   facebook: '',
   googleMapsEmbed: '',
@@ -113,21 +118,18 @@ export default function BusinessInfoEditor() {
     <div>
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/" className="text-slate-400 hover:text-slate-600">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </Link>
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">Informações</h1>
-          <p className="text-xs text-slate-400">{clientName}</p>
+        <div className="flex-1">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-0.5">{clientName}</p>
+          <h1 className="text-2xl font-bold text-slate-900">Informações</h1>
         </div>
-        <div className="ml-auto flex gap-2 items-center">
-          {saved && <span className="text-xs text-green-600">Salvo!</span>}
+        <div className="flex gap-2 items-center">
+          {saved && (
+            <span className="text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-lg">✓ Salvo</span>
+          )}
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
+            className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 text-sm font-bold rounded-xl transition disabled:opacity-50 shadow-sm"
           >
             {saving ? 'Salvando...' : 'Salvar'}
           </button>
@@ -166,10 +168,32 @@ export default function BusinessInfoEditor() {
 
         {/* Horários */}
         <Section title="Horário de Atendimento">
+          <Field
+            label="Dias de funcionamento"
+            value={info.hours?.funcionamento}
+            onChange={v => updateHours('funcionamento', v)}
+            placeholder="Ex: Terça a Domingo"
+          />
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Segunda a Sexta" value={info.hours?.weekdays} onChange={v => updateHours('weekdays', v)} placeholder="Segunda a Sexta: 08:30 às 18:00" />
-            <Field label="Sábado" value={info.hours?.saturday} onChange={v => updateHours('saturday', v)} placeholder="Sábado: 08:30 às 12:00" />
+            <Field
+              label="Jantar"
+              value={info.hours?.jantar}
+              onChange={v => updateHours('jantar', v)}
+              placeholder="Ex: 19h30 às 23h"
+            />
+            <Field
+              label="Almoço"
+              value={info.hours?.almoco}
+              onChange={v => updateHours('almoco', v)}
+              placeholder="Ex: Sáb 11h · Dom 11h30"
+            />
           </div>
+          <Field
+            label="Horário completo (exibido na seção Contato)"
+            value={info.hours?.completo}
+            onChange={v => updateHours('completo', v)}
+            placeholder="Ex: Ter a Sex 19h30–23h · Sáb 11h–14h / 19h30–23h30 · Dom 11h30–14h"
+          />
         </Section>
 
         {/* Redes sociais */}

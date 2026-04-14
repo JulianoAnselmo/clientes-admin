@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { db, storage } from '../firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
@@ -410,21 +410,18 @@ export default function VeiculosEditor() {
     <div>
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/" className="text-slate-400 hover:text-slate-600">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </Link>
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">Veículos</h1>
-          <p className="text-xs text-slate-400">{clientName}</p>
+        <div className="flex-1">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-0.5">{clientName}</p>
+          <h1 className="text-2xl font-bold text-slate-900">Veículos</h1>
         </div>
         <div className="ml-auto flex gap-2 items-center">
-          {saved && <span className="text-xs text-green-600">Salvo!</span>}
+          {saved && (
+            <span className="text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-lg">✓ Salvo</span>
+          )}
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
+            className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 text-sm font-bold rounded-xl transition disabled:opacity-50 shadow-sm"
           >
             {saving ? 'Salvando...' : 'Salvar'}
           </button>

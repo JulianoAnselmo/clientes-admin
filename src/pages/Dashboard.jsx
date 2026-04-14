@@ -2,10 +2,41 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { db } from '../firebase'
-import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore'
+
+const TYPE_CONFIG = {
+  restaurante: {
+    emoji: '🍽️',
+    label: 'Restaurante',
+    badge: 'bg-amber-100 text-amber-800',
+    sections: (slug) => [
+      { label: 'Cardápio',    to: `/restaurante/${slug}/cardapio`,  cls: 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-100' },
+      { label: 'Promoções',   to: `/restaurante/${slug}/promocoes`, cls: 'bg-violet-50 hover:bg-violet-100 text-violet-800 border-violet-100' },
+      { label: 'Informações', to: `/restaurante/${slug}/info`,      cls: 'bg-teal-50 hover:bg-teal-100 text-teal-800 border-teal-100' },
+    ],
+  },
+  garagem: {
+    emoji: '🚗',
+    label: 'Garagem',
+    badge: 'bg-blue-100 text-blue-800',
+    sections: (slug) => [
+      { label: 'Veículos',    to: `/restaurante/${slug}/veiculos`, cls: 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-100' },
+      { label: 'Informações', to: `/restaurante/${slug}/info`,     cls: 'bg-teal-50 hover:bg-teal-100 text-teal-800 border-teal-100' },
+    ],
+  },
+  roupas: {
+    emoji: '👔',
+    label: 'Loja',
+    badge: 'bg-rose-100 text-rose-800',
+    sections: (slug) => [
+      { label: 'Catálogo',    to: `/restaurante/${slug}/roupas`, cls: 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-100' },
+      { label: 'Informações', to: `/restaurante/${slug}/info`,   cls: 'bg-teal-50 hover:bg-teal-100 text-teal-800 border-teal-100' },
+    ],
+  },
+}
 
 export default function Dashboard() {
-  const { userData, isAdmin, user } = useAuth()
+  const { userData, isAdmin } = useAuth()
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -16,11 +47,8 @@ export default function Dashboard() {
           const snap = await getDocs(collection(db, 'restaurants'))
           setRestaurants(snap.docs.map(d => ({ id: d.id, ...d.data() })))
         } else if (userData?.restaurantSlug) {
-          const docRef = doc(db, 'restaurants', userData.restaurantSlug)
-          const snap = await getDoc(docRef)
-          if (snap.exists()) {
-            setRestaurants([{ id: snap.id, ...snap.data() }])
-          }
+          const snap = await getDoc(doc(db, 'restaurants', userData.restaurantSlug))
+          if (snap.exists()) setRestaurants([{ id: snap.id, ...snap.data() }])
         }
       } catch (err) {
         console.error('Erro ao carregar:', err)
@@ -30,99 +58,93 @@ export default function Dashboard() {
     if (userData) load()
   }, [userData, isAdmin])
 
-  const isGaragem = (r) => r.type === 'garagem'
-  const isRoupas = (r) => r.type === 'roupas'
-
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500"></div>
+      <div className="flex items-center justify-center py-32">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-amber-500 border-t-transparent" />
       </div>
     )
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-slate-800">
-          {isAdmin ? 'Todos os Clientes' : 'Meu Painel'}
-        </h1>
+      {/* Header */}
+      <div className="flex items-end justify-between mb-6">
+        <div>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">
+            {isAdmin ? 'Todos os clientes' : 'Meu painel'}
+          </p>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {isAdmin ? `${restaurants.length} cliente${restaurants.length !== 1 ? 's' : ''}` : 'Dashboard'}
+          </h1>
+        </div>
         {isAdmin && (
           <Link
             to="/admin/restaurantes"
-            className="text-sm bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl transition font-medium"
+            className="flex items-center gap-2 text-sm bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold px-4 py-2 rounded-xl transition shadow-sm"
           >
-            + Novo
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Novo cliente
           </Link>
         )}
       </div>
 
+      {/* Empty state */}
       {restaurants.length === 0 ? (
-        <div className="text-center py-20 text-slate-400">
-          <p className="text-lg">Nenhum cliente encontrado</p>
-          {isAdmin && <p className="text-sm mt-1">Crie um novo cliente para comecar</p>}
+        <div className="flex flex-col items-center justify-center py-32 text-center">
+          <div className="text-5xl mb-4">🏪</div>
+          <p className="text-base font-semibold text-slate-600">Nenhum cliente cadastrado</p>
+          {isAdmin && (
+            <Link to="/admin/restaurantes" className="mt-3 text-sm text-amber-600 hover:text-amber-700 font-medium hover:underline">
+              Criar primeiro cliente →
+            </Link>
+          )}
         </div>
       ) : (
-        <div className="grid gap-4">
-          {restaurants.map(r => (
-            <div key={r.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="font-semibold text-lg text-slate-800">{r.name}</h2>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isGaragem(r) ? 'bg-blue-50 text-blue-700' : isRoupas(r) ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>
-                  {isGaragem(r) ? '🚗 Garagem' : isRoupas(r) ? '👔 Roupas' : '🍽️ Restaurante'}
-                </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {restaurants.map(r => {
+            const config = TYPE_CONFIG[r.type] || TYPE_CONFIG.restaurante
+            const slug = r.slug || r.id
+            const sections = config.sections(slug)
+
+            return (
+              <div
+                key={r.id}
+                className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+              >
+                {/* Card top */}
+                <div className="px-5 pt-5 pb-4">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <h2 className="text-base font-bold text-slate-900 leading-snug">{r.name}</h2>
+                    <span className={`shrink-0 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${config.badge}`}>
+                      {config.emoji} {config.label}
+                    </span>
+                  </div>
+                  {isAdmin && (
+                    <p className="text-[11px] text-slate-400 font-mono">/{slug}</p>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="h-px bg-slate-100 mx-5" />
+
+                {/* Actions */}
+                <div className="px-5 py-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${sections.length}, 1fr)` }}>
+                  {sections.map(s => (
+                    <Link
+                      key={s.to}
+                      to={s.to}
+                      className={`text-center py-2.5 rounded-xl text-[13px] font-semibold border transition ${s.cls}`}
+                    >
+                      {s.label}
+                    </Link>
+                  ))}
+                </div>
               </div>
-              <p className="text-xs text-slate-400 mb-4">/{r.slug}</p>
-              <div className="flex gap-3">
-                {isGaragem(r) ? (
-                  <>
-                    <Link
-                      to={`/restaurante/${r.slug}/veiculos`}
-                      className="flex-1 text-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-sm font-medium transition"
-                    >
-                      Veículos
-                    </Link>
-                    <Link
-                      to={`/restaurante/${r.slug}/info`}
-                      className="flex-1 text-center py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl text-sm font-medium transition"
-                    >
-                      Informações
-                    </Link>
-                  </>
-                ) : isRoupas(r) ? (
-                  <>
-                    <Link
-                      to={`/restaurante/${r.slug}/roupas`}
-                      className="flex-1 text-center py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-sm font-medium transition"
-                    >
-                      Catálogo
-                    </Link>
-                    <Link
-                      to={`/restaurante/${r.slug}/info`}
-                      className="flex-1 text-center py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl text-sm font-medium transition"
-                    >
-                      Informações
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <Link
-                      to={`/restaurante/${r.slug}/cardapio`}
-                      className="flex-1 text-center py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-sm font-medium transition"
-                    >
-                      Cardapio
-                    </Link>
-                    <Link
-                      to={`/restaurante/${r.slug}/promocoes`}
-                      className="flex-1 text-center py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-sm font-medium transition"
-                    >
-                      Promocoes
-                    </Link>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

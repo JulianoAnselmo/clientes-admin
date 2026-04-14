@@ -100,7 +100,6 @@ export default function AdminRestaurantes() {
           updatedAt: new Date().toISOString()
         })
       } else {
-        // Initialize empty cardapio and promocoes (existing behavior)
         await setDoc(doc(db, 'restaurants', form.slug, 'data', 'cardapio'), {
           content: [],
           updatedAt: new Date().toISOString()
@@ -109,6 +108,27 @@ export default function AdminRestaurantes() {
           content: {
             domingo: [], segunda: [], terca: [], quarta: [],
             quinta: [], sexta: [], sabado: []
+          },
+          updatedAt: new Date().toISOString()
+        })
+        await setDoc(doc(db, 'restaurants', form.slug, 'data', 'businessInfo'), {
+          content: {
+            name: form.name,
+            city: '',
+            slogan: '',
+            tagline: '',
+            whatsapp: '',
+            whatsappNumber: '',
+            phone: '',
+            address: '',
+            neighborhood: '',
+            cityState: '',
+            cep: '',
+            hours: { funcionamento: '', jantar: '', almoco: '', completo: '' },
+            instagram: '',
+            facebook: '',
+            googleMapsEmbed: '',
+            googleMapsLink: ''
           },
           updatedAt: new Date().toISOString()
         })
@@ -126,16 +146,10 @@ export default function AdminRestaurantes() {
   async function handleDelete(slug, name, type) {
     if (!confirm(`Remover "${name}"? Esta ação não pode ser desfeita.`)) return
     try {
-      if (type === 'garagem') {
-        await deleteDoc(doc(db, 'restaurants', slug, 'data', 'veiculos'))
-        await deleteDoc(doc(db, 'restaurants', slug, 'data', 'businessInfo'))
-      } else if (type === 'roupas') {
-        await deleteDoc(doc(db, 'restaurants', slug, 'data', 'roupas'))
-        await deleteDoc(doc(db, 'restaurants', slug, 'data', 'businessInfo'))
-      } else {
-        await deleteDoc(doc(db, 'restaurants', slug, 'data', 'cardapio'))
-        await deleteDoc(doc(db, 'restaurants', slug, 'data', 'promocoes'))
-      }
+      const docs = ['cardapio', 'promocoes', 'businessInfo', 'veiculos', 'roupas']
+      await Promise.all(docs.map(d =>
+        deleteDoc(doc(db, 'restaurants', slug, 'data', d)).catch(() => {})
+      ))
       await deleteDoc(doc(db, 'restaurants', slug))
       loadRestaurants()
     } catch (err) {
@@ -164,13 +178,9 @@ export default function AdminRestaurantes() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Link to="/" className="text-slate-400 hover:text-slate-600">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
-          <h1 className="text-xl font-bold text-slate-800">Gerenciar Clientes</h1>
+        <div>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Admin</p>
+          <h1 className="text-2xl font-bold text-slate-900">Gerenciar Clientes</h1>
         </div>
         <div className="flex gap-2">
           <Link
@@ -332,6 +342,12 @@ export default function AdminRestaurantes() {
                     className="text-xs px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition"
                   >
                     Promoções
+                  </Link>
+                  <Link
+                    to={`/restaurante/${r.slug}/info`}
+                    className="text-xs px-3 py-1.5 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition"
+                  >
+                    Informações
                   </Link>
                 </>
               )}
