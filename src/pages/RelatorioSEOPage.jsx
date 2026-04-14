@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
-import html2pdf from 'html2pdf.js'
+import { jsPDF } from 'jspdf'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || ''
@@ -277,40 +277,246 @@ export default function RelatorioSEOPage() {
     setGenerating(false)
   }
 
-  async function handleExportPDF() {
-    if (!reportRef.current) return
+  function handleExportPDF() {
+    if (!report) return
     setExporting(true)
     try {
-      // Create an isolated iframe to avoid Tailwind's oklch colors
-      const iframe = document.createElement('iframe')
-      iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:auto;border:none;'
-      document.body.appendChild(iframe)
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const W = 210
+      const margin = 15
+      const contentW = W - margin * 2
+      let y = margin
 
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document
-      iframeDoc.open()
-      iframeDoc.write(`<!DOCTYPE html><html><head><style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: system-ui, -apple-system, sans-serif; color: #1e293b; background: #fff; }
-      </style></head><body></body></html>`)
-      iframeDoc.close()
+      // Helper functions
+      const setColor = (hex) => {
+        const r = parseInt(hex.slice(1, 3), 16)
+        const g = parseInt(hex.slice(3, 5), 16)
+        const b = parseInt(hex.slice(5, 7), 16)
+        pdf.setTextColor(r, g, b)
+      }
+      const setFillColor = (hex) => {
+        const r = parseInt(hex.slice(1, 3), 16)
+        const g = parseInt(hex.slice(3, 5), 16)
+        const b = parseInt(hex.slice(5, 7), 16)
+        pdf.setFillColor(r, g, b)
+      }
+      const setDrawColor = (hex) => {
+        const r = parseInt(hex.slice(1, 3), 16)
+        const g = parseInt(hex.slice(3, 5), 16)
+        const b = parseInt(hex.slice(5, 7), 16)
+        pdf.setDrawColor(r, g, b)
+      }
+      const checkPage = (needed) => {
+        if (y + needed > 280) { pdf.addPage(); y = margin }
+      }
 
-      const clone = reportRef.current.cloneNode(true)
-      clone.style.width = '760px'
-      iframeDoc.body.appendChild(clone)
+      // Title
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(18)
+      setColor('#1e293b')
+      pdf.text(restaurant.name, W / 2, y, { align: 'center' })
+      y += 8
 
-      const filename = `relatorio-seo-${slug}-${new Date().toISOString().slice(0, 7)}.pdf`
-      await html2pdf()
-        .set({
-          margin: [10, 10, 10, 10],
-          filename,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(11)
+      setColor('#64748b')
+      pdf.text('Como seu site apareceu no Google', W / 2, y, { align: 'center' })
+      y += 6
+
+      pdf.setFontSize(9)
+      setColor('#94a3b8')
+      pdf.text(`Período: ${formatDateBR(report.period.start)} a ${formatDateBR(report.period.end)}`, W / 2, y, { align: 'center' })
+      y += 10
+
+      // Divider
+      setDrawColor('#e2e8f0')
+      pdf.line(margin, y, W - margin, y)
+      y += 8
+
+      // Intro text
+      pdf.setFontSize(8.5)
+      setColor('#475569')
+      const introLines = pdf.splitTextToSize(
+        'Este relatório mostra como as pessoas encontraram seu site pesquisando no Google. ' +
+        'Abaixo você verá quantas vezes seu site apareceu nos resultados, quantas pessoas clicaram e quais palavras usaram para te encontrar.',
+        contentW
+      )
+      pdf.text(introLines, margin, y)
+      y += introLines.length * 4 + 8
+
+      // KPI Cards — 2x2 grid
+      const cardW = (contentW - 6) / 2
+      const cardH = 28
+      const kpis = [
+        { label: 'CLIQUES', value: formatNumber(report.summary.clicks), desc: 'Quantas vezes alguém clicou no seu site', bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8' },
+        { label: 'IMPRESSÕES', value: formatNumber(report.summary.impressions), desc: 'Quantas vezes seu site apareceu no Google', bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
+        { label: 'TAXA DE CLIQUES (CTR)', value: formatPercent(report.summary.ctr), desc: 'Porcentagem de pessoas que clicou. Quanto maior, melhor!', bg: '#fffbeb', border: '#fde68a', text: '#b45309' },
+        { label: 'POSIÇÃO MÉDIA', value: formatPosition(report.summary.position), desc: 'Posição média no Google. Posição 1 = primeiro resultado', bg: '#faf5ff', border: '#d8b4fe', text: '#7e22ce' },
+      ]
+
+      kpis.forEach((kpi, i) => {
+        const col = i % 2
+        const row = Math.floor(i / 2)
+        const cx = margin + col * (cardW + 6)
+        const cy = y + row * (cardH + 4)
+
+        setFillColor(kpi.bg)
+        setDrawColor(kpi.border)
+        pdf.roundedRect(cx, cy, cardW, cardH, 2, 2, 'FD')
+
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(7)
+        setColor(kpi.text)
+        pdf.text(kpi.label, cx + 4, cy + 6)
+
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(16)
+        pdf.text(kpi.value, cx + 4, cy + 15)
+
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(6.5)
+        setColor('#64748b')
+        const descLines = pdf.splitTextToSize(kpi.desc, cardW - 8)
+        pdf.text(descLines, cx + 4, cy + 21)
+      })
+
+      y += (cardH + 4) * 2 + 10
+
+      // Top Queries table
+      if (report.topQueries.length > 0) {
+        checkPage(40)
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(10)
+        setColor('#1e293b')
+        pdf.text('O que as pessoas pesquisaram para te encontrar', margin, y)
+        y += 4
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(7.5)
+        setColor('#64748b')
+        pdf.text('Termos que as pessoas digitaram no Google e que fizeram seu site aparecer.', margin, y)
+        y += 6
+
+        // Table header
+        setFillColor('#f8fafc')
+        setDrawColor('#e2e8f0')
+        pdf.roundedRect(margin, y, contentW, 7, 1, 1, 'FD')
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(7)
+        setColor('#64748b')
+        pdf.text('#', margin + 3, y + 5)
+        pdf.text('O que pesquisaram', margin + 12, y + 5)
+        pdf.text('Clicaram', W - margin - 30, y + 5, { align: 'right' })
+        pdf.text('Viram', W - margin - 3, y + 5, { align: 'right' })
+        y += 8
+
+        report.topQueries.forEach((q, i) => {
+          checkPage(7)
+          if (i % 2 === 1) {
+            setFillColor('#f8fafc')
+            pdf.rect(margin, y - 1, contentW, 7, 'F')
+          }
+          pdf.setFont('helvetica', 'normal')
+          pdf.setFontSize(8)
+          setColor('#94a3b8')
+          pdf.text(`${i + 1}`, margin + 3, y + 4)
+          setColor('#334155')
+          pdf.setFont('helvetica', 'bold')
+          const queryText = q.query.length > 40 ? q.query.slice(0, 40) + '…' : q.query
+          pdf.text(queryText, margin + 12, y + 4)
+          pdf.setFont('helvetica', 'normal')
+          setColor('#1d4ed8')
+          pdf.text(formatNumber(q.clicks), W - margin - 30, y + 4, { align: 'right' })
+          setColor('#64748b')
+          pdf.text(formatNumber(q.impressions), W - margin - 3, y + 4, { align: 'right' })
+          y += 7
         })
-        .from(clone)
-        .save()
+        y += 8
+      }
 
-      document.body.removeChild(iframe)
+      // Top Pages table
+      if (report.topPages.length > 0) {
+        checkPage(40)
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(10)
+        setColor('#1e293b')
+        pdf.text('Páginas mais visitadas do seu site', margin, y)
+        y += 4
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(7.5)
+        setColor('#64748b')
+        pdf.text('Páginas que mais receberam visitas vindas do Google.', margin, y)
+        y += 6
+
+        setFillColor('#f8fafc')
+        setDrawColor('#e2e8f0')
+        pdf.roundedRect(margin, y, contentW, 7, 1, 1, 'FD')
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(7)
+        setColor('#64748b')
+        pdf.text('#', margin + 3, y + 5)
+        pdf.text('Página', margin + 12, y + 5)
+        pdf.text('Clicaram', W - margin - 30, y + 5, { align: 'right' })
+        pdf.text('Viram', W - margin - 3, y + 5, { align: 'right' })
+        y += 8
+
+        report.topPages.forEach((p, i) => {
+          checkPage(7)
+          if (i % 2 === 1) {
+            setFillColor('#f8fafc')
+            pdf.rect(margin, y - 1, contentW, 7, 'F')
+          }
+          let displayUrl = p.page
+          try { displayUrl = new URL(p.page).pathname } catch {}
+          if (displayUrl === '/') displayUrl = 'Página inicial'
+          if (displayUrl.length > 45) displayUrl = displayUrl.slice(0, 45) + '…'
+
+          pdf.setFont('helvetica', 'normal')
+          pdf.setFontSize(8)
+          setColor('#94a3b8')
+          pdf.text(`${i + 1}`, margin + 3, y + 4)
+          setColor('#334155')
+          pdf.setFont('helvetica', 'bold')
+          pdf.text(displayUrl, margin + 12, y + 4)
+          pdf.setFont('helvetica', 'normal')
+          setColor('#1d4ed8')
+          pdf.text(formatNumber(p.clicks), W - margin - 30, y + 4, { align: 'right' })
+          setColor('#64748b')
+          pdf.text(formatNumber(p.impressions), W - margin - 3, y + 4, { align: 'right' })
+          y += 7
+        })
+        y += 8
+      }
+
+      // Summary tip
+      checkPage(20)
+      setFillColor('#fffbeb')
+      setDrawColor('#fde68a')
+      const tipText = report.summary.clicks > 0
+        ? `Neste mês, ${formatNumber(report.summary.impressions)} pessoas viram seu site no Google e ${formatNumber(report.summary.clicks)} delas clicaram para visitar. Seu site aparece em média na posição ${formatPosition(report.summary.position)} dos resultados de busca.`
+        : 'Seu site ainda está começando a aparecer no Google. É normal levar algumas semanas para os resultados crescerem. Continue mantendo o site atualizado!'
+      const tipLines = pdf.splitTextToSize(tipText, contentW - 10)
+      const tipH = tipLines.length * 4 + 12
+      pdf.roundedRect(margin, y, contentW, tipH, 2, 2, 'FD')
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(8)
+      setColor('#92400e')
+      pdf.text('O que esses números significam?', margin + 5, y + 6)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(7.5)
+      setColor('#78350f')
+      pdf.text(tipLines, margin + 5, y + 12)
+      y += tipH + 8
+
+      // Footer
+      setDrawColor('#f1f5f9')
+      pdf.line(margin, y, W - margin, y)
+      y += 5
+      pdf.setFontSize(7)
+      setColor('#94a3b8')
+      const footerText = `Relatório gerado em ${new Date(report.generatedAt).toLocaleDateString('pt-BR')} às ${new Date(report.generatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — Dados do Google Search Console`
+      pdf.text(footerText, W / 2, y, { align: 'center' })
+
+      pdf.save(`relatorio-seo-${slug}-${new Date().toISOString().slice(0, 7)}.pdf`)
     } catch (err) {
       setError('Erro ao exportar PDF: ' + err.message)
     }
