@@ -543,91 +543,85 @@ export default function GestaoClientesPage() {
         {restaurants.length === 0 ? (
           <div className="py-16 text-center text-slate-400 text-sm">Nenhum cliente cadastrado</div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
             {restaurants.map(r => {
               const c = contracts[r.slug]
               const hasContract = !!c
               const ps = paymentStatus(c)
               const isCurrentPaid = thisMonthRecord(c)?.paid
+              const borderColor =
+                ps === 'overdue' ? 'border-l-4 border-red-400' :
+                ps === 'due-soon' ? 'border-l-4 border-yellow-400' : ''
 
               return (
-                <div key={r.slug} className={`px-6 py-4 flex flex-wrap lg:flex-nowrap items-center gap-4 hover:bg-slate-50 transition ${
-                  ps === 'overdue' ? 'border-l-4 border-red-400' :
-                  ps === 'due-soon' ? 'border-l-4 border-yellow-400' : ''
-                }`}>
-                  {/* Nome + status */}
-                  <div className="flex-1 min-w-[160px]">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-slate-800 text-sm">{r.name}</span>
-                      {hasContract && <StatusBadge status={c.status} />}
+                <div key={r.slug} className={`bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition overflow-hidden ${borderColor}`}>
+                  {/* Card Header */}
+                  <div className="px-5 py-4 flex items-start justify-between border-b border-slate-100">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-800">{r.name}</span>
+                        {hasContract && <StatusBadge status={c.status} />}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">{r.slug}</p>
+                      {c?.notes && (
+                        <p className="text-xs text-slate-400 mt-1 truncate max-w-[250px]" title={c.notes}>
+                          📝 {c.notes}
+                        </p>
+                      )}
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">{r.slug}</p>
-                    {c?.notes && (
-                      <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]" title={c.notes}>
-                        📝 {c.notes}
-                      </p>
+                    {hasContract && (
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <span className="text-lg font-bold text-slate-800">{brl.format(c.contractValue)}</span>
+                        <p className="text-[10px] text-slate-400">por mês</p>
+                      </div>
                     )}
                   </div>
 
-                  {/* Valor */}
-                  <div className="w-24 text-right">
-                    {hasContract ? (
-                      <span className="text-sm font-bold text-slate-700">{brl.format(c.contractValue)}</span>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                    <p className="text-[10px] text-slate-400">mensal</p>
-                  </div>
-
-                  {/* Pagamento */}
-                  <div className="w-32 text-center">
-                    {hasContract ? (
-                      <>
+                  {/* Card Body — Info Grid */}
+                  {hasContract && (
+                    <div className="px-5 py-3 grid grid-cols-3 gap-3 border-b border-slate-100">
+                      {/* Pagamento */}
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Pagamento</p>
                         <PaymentBadge contract={c} />
                         <p className="text-[10px] text-slate-400 mt-1">dia {c.paymentDay}</p>
-                      </>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </div>
+                      </div>
 
-                  {/* Domínio */}
-                  <div className="w-40">
-                    {hasContract && c.domain ? (
-                      <>
-                        <p className="text-xs text-slate-700 font-medium truncate">{c.domain}</p>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <DomainBadge contract={c} />
-                          {c.domainRenewal && (
-                            <span className="text-[10px] text-slate-400">
-                              {new Date(c.domainRenewal).toLocaleDateString('pt-BR')}
-                            </span>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </div>
+                      {/* Domínio */}
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Domínio</p>
+                        {c.domain ? (
+                          <>
+                            <p className="text-xs text-slate-700 font-medium truncate">{c.domain}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <DomainBadge contract={c} />
+                              {c.domainRenewal && (
+                                <span className="text-[10px] text-slate-400">
+                                  {new Date(c.domainRenewal).toLocaleDateString('pt-BR')}
+                                </span>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </div>
 
-                  {/* Contrato */}
-                  <div className="w-28 text-center">
-                    {hasContract ? (
-                      <>
+                      {/* Contrato */}
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Contrato</p>
                         <ContractDuration contract={c} />
                         {c.contractStart && (
                           <p className="text-[10px] text-slate-400 mt-0.5">
                             desde {new Date(c.contractStart).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
                           </p>
                         )}
-                      </>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </div>
+                      </div>
+                    </div>
+                  )}
 
-                  {/* Ações */}
-                  <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+                  {/* Card Footer — Actions */}
+                  <div className="px-5 py-3 flex items-center gap-1.5 flex-wrap">
                     {/* Marcar como pago */}
                     {hasContract && !isCurrentPaid && (
                       <button
@@ -669,6 +663,9 @@ export default function GestaoClientesPage() {
                         📊 SEO
                       </button>
                     )}
+
+                    {/* Spacer */}
+                    <div className="flex-1" />
 
                     {/* WhatsApp */}
                     {hasContract && (
