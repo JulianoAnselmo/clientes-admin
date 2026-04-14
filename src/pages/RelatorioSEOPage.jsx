@@ -277,38 +277,26 @@ export default function RelatorioSEOPage() {
     setGenerating(false)
   }
 
-  function stripOklch(element) {
-    // Remove oklch colors from computed styles that html2canvas can't parse
-    const all = element.querySelectorAll('*')
-    const targets = [element, ...all]
-    targets.forEach(el => {
-      const computed = window.getComputedStyle(el)
-      const props = ['color', 'background-color', 'border-color', 'border-top-color', 'border-bottom-color', 'border-left-color', 'border-right-color']
-      props.forEach(prop => {
-        const val = computed.getPropertyValue(prop)
-        if (val && val.includes('oklch')) {
-          // Replace oklch with transparent or a fallback
-          if (prop === 'color') {
-            el.style.setProperty(prop, '#1e293b')
-          } else if (prop === 'background-color') {
-            el.style.setProperty(prop, '#ffffff')
-          } else {
-            el.style.setProperty(prop, '#e2e8f0')
-          }
-        }
-      })
-    })
-  }
-
   async function handleExportPDF() {
     if (!reportRef.current) return
     setExporting(true)
     try {
-      // Clone the report element to avoid modifying the original
+      // Create an isolated iframe to avoid Tailwind's oklch colors
+      const iframe = document.createElement('iframe')
+      iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:auto;border:none;'
+      document.body.appendChild(iframe)
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document
+      iframeDoc.open()
+      iframeDoc.write(`<!DOCTYPE html><html><head><style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; color: #1e293b; background: #fff; }
+      </style></head><body></body></html>`)
+      iframeDoc.close()
+
       const clone = reportRef.current.cloneNode(true)
-      clone.style.width = reportRef.current.offsetWidth + 'px'
-      document.body.appendChild(clone)
-      stripOklch(clone)
+      clone.style.width = '760px'
+      iframeDoc.body.appendChild(clone)
 
       const filename = `relatorio-seo-${slug}-${new Date().toISOString().slice(0, 7)}.pdf`
       await html2pdf()
@@ -322,7 +310,7 @@ export default function RelatorioSEOPage() {
         .from(clone)
         .save()
 
-      document.body.removeChild(clone)
+      document.body.removeChild(iframe)
     } catch (err) {
       setError('Erro ao exportar PDF: ' + err.message)
     }
