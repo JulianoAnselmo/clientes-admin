@@ -407,15 +407,22 @@ export default function GestaoClientesPage() {
   async function loadAll() {
     setLoading(true)
     try {
-      const [restSnap, contractSnap] = await Promise.all([
+      const [restSnap, contractSnap] = await Promise.allSettled([
         getDocs(collection(db, 'restaurants')),
         getDocs(collection(db, 'contracts')),
       ])
-      const rests = restSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-      const cmap = {}
-      contractSnap.docs.forEach(d => { cmap[d.id] = { id: d.id, ...d.data() } })
-      setRestaurants(rests)
-      setContracts(cmap)
+      if (restSnap.status === 'fulfilled') {
+        setRestaurants(restSnap.value.docs.map(d => ({ id: d.id, ...d.data() })))
+      } else {
+        console.error('Erro ao carregar restaurantes:', restSnap.reason)
+      }
+      if (contractSnap.status === 'fulfilled') {
+        const cmap = {}
+        contractSnap.value.docs.forEach(d => { cmap[d.id] = { id: d.id, ...d.data() } })
+        setContracts(cmap)
+      } else {
+        console.error('Erro ao carregar contratos:', contractSnap.reason)
+      }
     } catch (err) {
       console.error('Erro ao carregar gestão:', err)
     }
