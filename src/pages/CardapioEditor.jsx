@@ -8,13 +8,14 @@ function generateId() {
 }
 
 const TAGS = [
-  { key: 'destaque', label: '⭐ Destaque', cls: 'bg-amber-400 text-amber-900 border-amber-400', movesToFront: true },
-  { key: 'vegetariano', label: 'Vegetariano', cls: 'bg-green-100 text-green-700 border-green-300' },
-  { key: 'vegano', label: 'Vegano', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
-  { key: 'sem-gluten', label: 'Sem Glúten', cls: 'bg-amber-100 text-amber-700 border-amber-300' },
-  { key: 'picante', label: 'Picante 🌶', cls: 'bg-red-100 text-red-700 border-red-300' },
-  { key: 'novo', label: 'Novo', cls: 'bg-blue-100 text-blue-700 border-blue-300' },
-  { key: 'favorito-chef', label: 'Favorito do Chef', cls: 'bg-purple-100 text-purple-700 border-purple-300' },
+  { key: 'destaque',      label: '⭐ Destaque',        cls: 'bg-amber-400 text-amber-900 border-amber-400', movesToFront: true },
+  { key: 'promocao',      label: '🏷️ Promoção',        cls: 'bg-pink-100 text-pink-700 border-pink-300' },
+  { key: 'vegetariano',   label: '🌿 Vegetariano',     cls: 'bg-green-100 text-green-700 border-green-300' },
+  { key: 'vegano',        label: '🌱 Vegano',           cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+  { key: 'sem-gluten',    label: '🌾 Sem Glúten',      cls: 'bg-amber-100 text-amber-700 border-amber-300' },
+  { key: 'picante',       label: '🌶 Picante',          cls: 'bg-red-100 text-red-700 border-red-300' },
+  { key: 'novo',          label: '✨ Novo',              cls: 'bg-blue-100 text-blue-700 border-blue-300' },
+  { key: 'favorito-chef', label: '👨‍🍳 Favorito do Chef', cls: 'bg-purple-100 text-purple-700 border-purple-300' },
 ]
 
 // ===== Item Editor =====
