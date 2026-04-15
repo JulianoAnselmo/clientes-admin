@@ -38,6 +38,33 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
   const [clipboardChecked, setClipboardChecked] = useState(false)
   const [showManualPaste, setShowManualPaste] = useState(false)
   const logEndRef = useRef(null)
+  const bookmarkletContainerRef = useRef(null)
+
+  // Cria o <a href="javascript:..."> fora da árvore React.
+  // React 18+ bloqueia javascript: URLs em href como protecao anti-XSS
+  // (substitui o href por um stub de erro). Criando o elemento via
+  // document.createElement, o React nunca ve/sanitiza o href.
+  useEffect(() => {
+    if (!isOpen || !bookmarkletContainerRef.current) return
+    const container = bookmarkletContainerRef.current
+    container.innerHTML = '' // limpa em caso de re-open
+
+    const a = document.createElement('a')
+    a.href = BOOKMARKLET_CODE
+    a.draggable = true
+    a.textContent = '🍽️ Sincronizar Menudino'
+    a.className = 'px-4 py-2 rounded-lg bg-amber-500 text-white font-medium text-sm hover:bg-amber-600 shadow-sm select-none cursor-grab active:cursor-grabbing no-underline inline-block'
+    a.style.textDecoration = 'none'
+    a.addEventListener('click', (e) => {
+      e.preventDefault()
+      alert('Não clique — arraste este botão para a sua barra de favoritos!')
+    })
+    container.appendChild(a)
+
+    return () => {
+      try { container.removeChild(a) } catch (e) { /* ok */ }
+    }
+  }, [isOpen])
 
   // Autoscroll dos logs
   useEffect(() => {
@@ -225,27 +252,15 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
                   </p>
                   <div className="flex items-center gap-3 py-2">
                     {/*
-                      React 18+ bloqueia `javascript:` URLs em href como precaução
-                      anti-XSS — o href é substituído por um stub que joga erro ao
-                      clicar. Isso quebra o drag-to-bookmarks. Contornamos setando
-                      o href via ref + setAttribute depois que React renderiza, que
-                      escapa da sanitização porque React não sabe do valor setado
-                      manualmente.
+                      O <a> real é criado via document.createElement no useEffect
+                      acima. Este div é só o container — React nunca vê o href
+                      javascript: então não aplica o stub anti-XSS.
                     */}
-                    <a
-                      ref={el => {
-                        if (el) el.setAttribute('href', BOOKMARKLET_CODE)
-                      }}
-                      onClick={e => {
-                        e.preventDefault()
-                        alert('Não clique — arraste este botão para a sua barra de favoritos!')
-                      }}
-                      draggable
-                      className="px-4 py-2 rounded-lg bg-amber-500 text-white font-medium text-sm hover:bg-amber-600 shadow-sm select-none cursor-grab active:cursor-grabbing"
-                    >
-                      🍽️ Sincronizar Menudino
-                    </a>
+                    <div ref={bookmarkletContainerRef} />
                     <span className="text-xs text-slate-500">← arraste pra barra de favoritos</span>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-800">
+                    <b>⚠ Já tinha arrastado antes?</b> Delete o bookmarklet antigo primeiro (botão direito → excluir) — ele ficou salvo como um stub de erro quando a página antiga ainda tinha bug. Depois arraste este novo.
                   </div>
                   <p className="text-xs text-slate-500">
                     O bookmarklet puxa categorias + items + horários do Menudino e copia tudo pro clipboard em JSON.
