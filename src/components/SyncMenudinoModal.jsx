@@ -15,18 +15,18 @@ import { syncMenudinoCardapio, tryParseBookmarkletPayload } from '../lib/menudin
  * Fallback: se o clipboard API não funcionar, há um textarea para colar manualmente.
  */
 
-// Bookmarklet que busca TUDO do Menudino (token, merchant, categorias, items)
-// e copia um payload JSON pronto pro clipboard. O cardapio-admin só precisa
-// ler esse JSON, processar e gravar no Firestore.
-//
-// Passos:
+// Código que faz TUDO do lado do Menudino:
 //   1. Valida que o user está em *.menudino.com
-//   2. fetch('/') para pegar app-access-token do header e merchantId do HTML
-//   3. fetch merchant details, categorias e items via API (com Authorization)
-//   4. Copia JSON do payload pro clipboard (com fallback execCommand/prompt)
+//   2. fetch('/') para pegar app-access-token do response header
+//   3. Extrai merchantId do HTML via regex do __next_f (RSC data)
+//   4. Chama menudino-merchants e menudino-catalog com Authorization
+//   5. Monta payload JSON e copia pro clipboard
 //
-// Qualquer erro em qualquer passo aparece em alert com mensagem clara.
-const BOOKMARKLET_CODE = `javascript:(async()=>{try{if(!location.hostname.includes('menudino.com')){alert('Voce nao esta em *.menudino.com. Host: '+location.hostname);return;}var r=await fetch('/',{cache:'no-store'});if(!r.ok){alert('fetch / falhou: HTTP '+r.status);return;}var t=r.headers.get('app-access-token');if(!t){alert('Sem header app-access-token. O site pode ter mudado.');return;}var h=await r.text(),m=h.match(/merchantSummary[\\\\"\\s:{]*id[\\\\"\\s:]*([a-f0-9-]{36})/);if(!m){alert('Nao achei merchantId no HTML. O site pode ter mudado.');return;}var mid=m[1],a={headers:{Authorization:'Bearer '+t}},cb='https://menudino-catalog.consumerapis.com/api/v1',mb='https://menudino-merchants.consumerapis.com/api/v1';var me=await(await fetch(mb+'/merchants/'+mid,a)).json();var cr=await(await fetch(cb+'/categories/'+mid+'?OnlyActive=false',a)).json();var cs=cr.items||[];var it={},tt=0;for(var i=0;i<cs.length;i++){var ir=await(await fetch(cb+'/items/'+mid+'/'+cs[i].id+'/summary?SellOnline=false',a)).json();it[cs[i].id]=ir.items||[];tt+=it[cs[i].id].length;}var p=JSON.stringify({version:1,merchant:me,categories:cs,itemsByCategoryId:it});var ok=function(){alert('OK! '+cs.length+' categorias e '+tt+' items copiados ('+p.length+' chars). Volte ao cardapio-admin e clique em Colar e sincronizar.');};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(p).then(ok,function(){var x=document.createElement('textarea');x.value=p;x.style.position='fixed';x.style.top='0';x.style.opacity='0';document.body.appendChild(x);x.focus();x.select();try{document.execCommand('copy');document.body.removeChild(x);ok();}catch(e){document.body.removeChild(x);prompt('Copie:',p);}});}else{prompt('Copie:',p);}}catch(e){alert('Erro no bookmarklet: '+(e&&e.message||e));}})();`
+// Uso: o user copia este texto via botão "Copiar código", abre o Menudino,
+// F12 → Console → Ctrl+V → Enter. O JSON resultante fica no clipboard pra
+// ser colado no cardapio-admin. Não usa bookmarklet porque React 18+ bloqueia
+// javascript: URLs em href como precaução anti-XSS.
+const SNIPPET_CODE = `(async()=>{try{if(!location.hostname.includes('menudino.com')){alert('Voce nao esta em *.menudino.com. Host: '+location.hostname);return;}var r=await fetch('/',{cache:'no-store'});if(!r.ok){alert('fetch / falhou: HTTP '+r.status);return;}var t=r.headers.get('app-access-token');if(!t){alert('Sem header app-access-token. O site pode ter mudado.');return;}var h=await r.text(),m=h.match(/merchantSummary[\\\\"\\s:{]*id[\\\\"\\s:]*([a-f0-9-]{36})/);if(!m){alert('Nao achei merchantId no HTML. O site pode ter mudado.');return;}var mid=m[1],a={headers:{Authorization:'Bearer '+t}},cb='https://menudino-catalog.consumerapis.com/api/v1',mb='https://menudino-merchants.consumerapis.com/api/v1';var me=await(await fetch(mb+'/merchants/'+mid,a)).json();var cr=await(await fetch(cb+'/categories/'+mid+'?OnlyActive=false',a)).json();var cs=cr.items||[];var it={},tt=0;for(var i=0;i<cs.length;i++){var ir=await(await fetch(cb+'/items/'+mid+'/'+cs[i].id+'/summary?SellOnline=false',a)).json();it[cs[i].id]=ir.items||[];tt+=it[cs[i].id].length;}var p=JSON.stringify({version:1,merchant:me,categories:cs,itemsByCategoryId:it});var ok=function(){alert('OK! '+cs.length+' categorias e '+tt+' items copiados ('+p.length+' chars). Volte ao cardapio-admin e clique em Colar e sincronizar.');};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(p).then(ok,function(){var x=document.createElement('textarea');x.value=p;x.style.position='fixed';x.style.top='0';x.style.opacity='0';document.body.appendChild(x);x.focus();x.select();try{document.execCommand('copy');document.body.removeChild(x);ok();}catch(e){document.body.removeChild(x);prompt('Copie:',p);}});}else{prompt('Copie:',p);}}catch(e){alert('Erro: '+(e&&e.message||e));}})();`
 
 export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onSyncComplete }) {
   const [menudinoUrl, setMenudinoUrl] = useState('')
@@ -38,33 +38,19 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
   const [clipboardChecked, setClipboardChecked] = useState(false)
   const [showManualPaste, setShowManualPaste] = useState(false)
   const logEndRef = useRef(null)
-  const bookmarkletContainerRef = useRef(null)
 
-  // Cria o <a href="javascript:..."> fora da árvore React.
-  // React 18+ bloqueia javascript: URLs em href como protecao anti-XSS
-  // (substitui o href por um stub de erro). Criando o elemento via
-  // document.createElement, o React nunca ve/sanitiza o href.
-  useEffect(() => {
-    if (!isOpen || !bookmarkletContainerRef.current) return
-    const container = bookmarkletContainerRef.current
-    container.innerHTML = '' // limpa em caso de re-open
+  const [snippetCopied, setSnippetCopied] = useState(false)
 
-    const a = document.createElement('a')
-    a.href = BOOKMARKLET_CODE
-    a.draggable = true
-    a.textContent = '🍽️ Sincronizar Menudino'
-    a.className = 'px-4 py-2 rounded-lg bg-amber-500 text-white font-medium text-sm hover:bg-amber-600 shadow-sm select-none cursor-grab active:cursor-grabbing no-underline inline-block'
-    a.style.textDecoration = 'none'
-    a.addEventListener('click', (e) => {
-      e.preventDefault()
-      alert('Não clique — arraste este botão para a sua barra de favoritos!')
-    })
-    container.appendChild(a)
-
-    return () => {
-      try { container.removeChild(a) } catch (e) { /* ok */ }
+  const copySnippetToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(SNIPPET_CODE)
+      setSnippetCopied(true)
+      setTimeout(() => setSnippetCopied(false), 2500)
+    } catch (e) {
+      // Fallback: selecionar o textarea
+      alert('Não consegui copiar automaticamente. Selecione o texto no campo abaixo e use Ctrl+C.')
     }
-  }, [isOpen])
+  }
 
   // Autoscroll dos logs
   useEffect(() => {
@@ -241,32 +227,11 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
         <div className="px-6 py-4 overflow-y-auto flex-1">
           {!success && (
             <>
-              {/* Setup primeira vez: bookmarklet */}
-              <details open className="mb-4 border border-slate-200 rounded-xl overflow-hidden group">
-                <summary className="px-4 py-3 bg-slate-50 cursor-pointer text-sm font-medium text-slate-700 hover:bg-slate-100 select-none">
-                  🔖 Instale o atalho (1x só)
-                </summary>
-                <div className="px-4 py-3 text-sm text-slate-600 space-y-2 border-t border-slate-200">
-                  <p>
-                    Garanta que sua <b>barra de favoritos</b> esteja visível (<kbd className="border px-1 rounded text-xs">Ctrl</kbd>+<kbd className="border px-1 rounded text-xs">Shift</kbd>+<kbd className="border px-1 rounded text-xs">B</kbd>) e depois <b>arraste</b> o botão laranja abaixo pra ela:
-                  </p>
-                  <div className="flex items-center gap-3 py-2">
-                    {/*
-                      O <a> real é criado via document.createElement no useEffect
-                      acima. Este div é só o container — React nunca vê o href
-                      javascript: então não aplica o stub anti-XSS.
-                    */}
-                    <div ref={bookmarkletContainerRef} />
-                    <span className="text-xs text-slate-500">← arraste pra barra de favoritos</span>
-                  </div>
-                  <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-800">
-                    <b>⚠ Já tinha arrastado antes?</b> Delete o bookmarklet antigo primeiro (botão direito → excluir) — ele ficou salvo como um stub de erro quando a página antiga ainda tinha bug. Depois arraste este novo.
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    O bookmarklet puxa categorias + items + horários do Menudino e copia tudo pro clipboard em JSON.
-                  </p>
-                </div>
-              </details>
+              {/* Warning sobre bookmarklet antigo quebrado */}
+              <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800">
+                <b>⚠ Já tinha um bookmarklet "Sincronizar Menudino" na sua barra de favoritos?</b><br />
+                Delete ele agora (botão direito → excluir). Ele ficou quebrado por um bug do React. Este novo fluxo usa <b>console do DevTools</b> ao invés de bookmarklet — mais simples e sempre funciona.
+              </div>
 
               {/* Input URL Menudino */}
               <div className="mb-4">
@@ -297,15 +262,48 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
                 <p className="text-xs text-slate-500 mt-1">Será aberto numa aba nova. Clique no bookmarklet da barra de favoritos quando a página carregar.</p>
               </div>
 
-              {/* Passos */}
+              {/* Passos novos: console-based */}
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm text-slate-700">
-                <div className="font-bold mb-2 text-slate-800">Depois de abrir o Menudino:</div>
-                <ol className="list-decimal pl-5 space-y-1 text-slate-600">
-                  <li>Aguarde a página carregar completamente</li>
-                  <li>Clique no atalho <b>"🍽️ Sincronizar Menudino"</b> na sua barra de favoritos</li>
-                  <li>Aguarde o alert dizer quantos items foram copiados</li>
-                  <li>Volte aqui e clique em <b>"Colar e sincronizar"</b> abaixo</li>
+                <div className="font-bold mb-3 text-slate-800">Passos:</div>
+                <ol className="list-decimal pl-5 space-y-2 text-slate-700">
+                  <li>
+                    <b>Copie o código</b> abaixo
+                    <button
+                      onClick={copySnippetToClipboard}
+                      className={`ml-2 px-3 py-1 rounded-md text-xs font-medium transition ${
+                        snippetCopied
+                          ? 'bg-green-500 text-white'
+                          : 'bg-slate-800 text-white hover:bg-slate-700'
+                      }`}
+                    >
+                      {snippetCopied ? '✓ Copiado' : '📋 Copiar código'}
+                    </button>
+                  </li>
+                  <li>
+                    <b>Abra</b> o seu Menudino em outra aba
+                    <button
+                      onClick={handleAbrirMenudino}
+                      disabled={!urlValida}
+                      className="ml-2 px-3 py-1 rounded-md text-xs font-medium bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40"
+                    >
+                      Abrir Menudino
+                    </button>
+                  </li>
+                  <li>Na aba do Menudino, pressione <kbd className="border px-1 rounded text-xs bg-white">F12</kbd> → aba <b>Console</b></li>
+                  <li>Cole o código (<kbd className="border px-1 rounded text-xs bg-white">Ctrl</kbd>+<kbd className="border px-1 rounded text-xs bg-white">V</kbd>) e pressione <kbd className="border px-1 rounded text-xs bg-white">Enter</kbd></li>
+                  <li>Aguarde o alert dizer "OK! X categorias, Y items copiados"</li>
+                  <li>Volte aqui e clique em <b>"Colar e sincronizar"</b></li>
                 </ol>
+                <details className="mt-3">
+                  <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-700">Ver o código que vai ser colado</summary>
+                  <textarea
+                    readOnly
+                    value={SNIPPET_CODE}
+                    onClick={e => e.target.select()}
+                    rows={6}
+                    className="mt-2 w-full px-2 py-1.5 rounded border border-slate-300 text-[10px] font-mono text-slate-600 bg-slate-50 resize-none"
+                  />
+                </details>
               </div>
 
               {/* Botão principal: colar do clipboard */}
