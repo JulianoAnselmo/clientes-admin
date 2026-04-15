@@ -38,6 +38,8 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
   const [clipboardChecked, setClipboardChecked] = useState(false)
   const [showManualPaste, setShowManualPaste] = useState(false)
   const logEndRef = useRef(null)
+  const modalBodyRef = useRef(null)
+  const resultAnchorRef = useRef(null)
 
   const [snippetCopied, setSnippetCopied] = useState(false)
 
@@ -56,6 +58,14 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
   useEffect(() => {
     if (logEndRef.current) logEndRef.current.scrollIntoView({ behavior: 'smooth' })
   }, [logs])
+
+  // Quando chega sucesso ou erro, rola a modal até o card de resultado
+  // pro user ver imediatamente (senão ele pode ficar olhando o espaço dos logs)
+  useEffect(() => {
+    if ((success || error) && resultAnchorRef.current) {
+      resultAnchorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [success, error])
 
   // Carrega a URL salva do restaurant doc e reset ao abrir
   useEffect(() => {
@@ -200,7 +210,7 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
   if (!isOpen) return null
 
   const urlValida = menudinoUrl && menudinoUrl.includes('menudino.com')
-  const cookieValido = cookie.trim().length > 20 && cookie.indexOf('app-access-token') !== -1
+  const cookieValido = cookie.trim().length > 20 && (cookie.indexOf('app-access-token') !== -1 || cookie.trim().startsWith('{'))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -224,14 +234,56 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
         </div>
 
         {/* Body */}
-        <div className="px-6 py-4 overflow-y-auto flex-1">
-          {!success && (
-            <>
-              {/* Warning sobre bookmarklet antigo quebrado */}
-              <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800">
-                <b>⚠ Já tinha um bookmarklet "Sincronizar Menudino" na sua barra de favoritos?</b><br />
-                Delete ele agora (botão direito → excluir). Ele ficou quebrado por um bug do React. Este novo fluxo usa <b>console do DevTools</b> ao invés de bookmarklet — mais simples e sempre funciona.
+        <div ref={modalBodyRef} className="px-6 py-4 overflow-y-auto flex-1">
+          {/* Âncora de resultado — posicionada aqui pra que success/error
+              apareçam no TOPO da modal quando o sync termina. */}
+          <div ref={resultAnchorRef} />
+
+          {/* Success — renderizado no topo pra ser o primeiro a ver */}
+          {success && (
+            <div className="mb-4 bg-green-50 border-2 border-green-400 rounded-xl p-4 text-sm text-green-900 shadow-sm">
+              <div className="font-bold text-base mb-2 flex items-center gap-2">
+                <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Sincronização concluída com sucesso!
               </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mt-3">
+                <div>Categorias novas: <b>{success.stats.categorias_novas}</b></div>
+                <div>Reorganizadas: <b>{success.stats.categorias_movidas}</b></div>
+                <div>Items adicionados: <b>{success.stats.adicionados}</b></div>
+                <div>Items atualizados: <b>{success.stats.atualizados}</b></div>
+                <div>Items inativados: <b>{success.stats.inativados}</b></div>
+                <div>Desc preservadas: <b>{success.stats.preservados_desc}</b></div>
+              </div>
+              <div className="mt-3 border-t border-green-200 pt-2">
+                <div className="font-medium mb-1 text-xs">Estrutura final no cardapio-admin:</div>
+                {success.estruturaFinal.map((s, i) => (
+                  <div key={i} className="text-xs">
+                    📁 <b>{s.label}</b> — {s.nCats} categorias, {s.nItens} items
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 text-xs text-green-700">
+                O cardápio já foi atualizado no Firestore. Você pode fechar este modal ou rodar de novo se precisar.
+              </div>
+            </div>
+          )}
+
+          {/* Error — renderizado no topo também */}
+          {error && (
+            <div className="mb-4 bg-red-50 border-2 border-red-400 rounded-xl p-4 text-sm text-red-800 shadow-sm">
+              <div className="font-bold text-base mb-1 flex items-center gap-2">
+                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Erro na sincronização
+              </div>
+              <div className="whitespace-pre-wrap break-words text-xs mt-2">{error}</div>
+            </div>
+          )}
+
+          {/* Setup section — fica sempre visível (não depende de success) */}
 
               {/* Input URL Menudino */}
               <div className="mb-4">
@@ -367,53 +419,16 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
                   </div>
                 </details>
               )}
-            </>
-          )}
 
-          {/* Logs */}
-          {logs.length > 0 && !success && (
-            <div className="mt-4 bg-slate-900 text-slate-100 rounded-xl p-3 max-h-64 overflow-y-auto font-mono text-xs">
+          {/* Logs — sempre visíveis (ajuda debug inclusive depois do success) */}
+          {logs.length > 0 && (
+            <div className="mt-4 bg-slate-900 text-slate-100 rounded-xl p-3 max-h-48 overflow-y-auto font-mono text-xs">
               {logs.map((line, i) => (
                 <div key={i} className={line.startsWith('===') ? 'text-amber-300 font-bold' : ''}>
                   {line || '\u00A0'}
                 </div>
               ))}
               <div ref={logEndRef} />
-            </div>
-          )}
-
-          {/* Error */}
-          {error && (
-            <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">
-              <div className="font-bold mb-1">Erro</div>
-              <div className="whitespace-pre-wrap break-words">{error}</div>
-            </div>
-          )}
-
-          {/* Success */}
-          {success && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-900">
-              <div className="font-bold mb-2 flex items-center gap-2">
-                <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                Sincronização concluída
-              </div>
-              <div className="space-y-1 text-xs">
-                <div>Categorias novas: <b>{success.stats.categorias_novas}</b></div>
-                <div>Reorganizadas: <b>{success.stats.categorias_movidas}</b></div>
-                <div>Items adicionados: <b>{success.stats.adicionados}</b></div>
-                <div>Items atualizados: <b>{success.stats.atualizados}</b></div>
-                <div>Items inativados: <b>{success.stats.inativados}</b></div>
-              </div>
-              <div className="mt-3 border-t border-green-200 pt-2">
-                <div className="font-medium mb-1">Estrutura final:</div>
-                {success.estruturaFinal.map((s, i) => (
-                  <div key={i} className="text-xs">
-                    [{s.label}] {s.nCats} categorias, {s.nItens} items
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </div>
