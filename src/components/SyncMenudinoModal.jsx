@@ -15,9 +15,12 @@ import { syncMenudinoCardapio } from '../lib/menudino-sync'
  * Fallback: se o clipboard API não funcionar, há um textarea para colar manualmente.
  */
 
-// Bookmarklet que, quando clicado enquanto o user está em *.menudino.com,
-// copia `document.cookie` pro clipboard e mostra um alert amigável.
-const BOOKMARKLET_CODE = `javascript:(function(){try{var c=document.cookie;if(!c||c.indexOf('app-access-token')===-1){alert('Nao encontrei o cookie do Menudino. Abra o seu cardapio Menudino antes de clicar aqui.');return;}navigator.clipboard.writeText(c).then(function(){alert('OK! Cookie do Menudino copiado. Volte ao cardapio-admin e clique em Colar e Sincronizar.');},function(){prompt('Copie este texto e cole no cardapio-admin:',c);});}catch(e){alert('Erro: '+e.message);}})();`
+// Bookmarklet robusto que:
+//  1. Valida que o user está em *.menudino.com
+//  2. Valida que document.cookie contém app-access-token
+//  3. Tenta navigator.clipboard.writeText com fallback execCommand e prompt
+//  4. Dá feedback claro em cada passo
+const BOOKMARKLET_CODE = `javascript:(function(){try{var h=location.hostname;if(h.indexOf('menudino.com')===-1){alert('Voce nao esta no site do Menudino. Host atual: '+h);return;}var c=document.cookie||'';if(!c){alert('document.cookie vazio. Recarregue a pagina do Menudino e tente de novo.');return;}if(c.indexOf('app-access-token')===-1){alert('Nenhum cookie "app-access-token" encontrado. Cookies disponiveis: '+c.split(';').map(function(p){return p.trim().split('=')[0];}).join(', '));return;}var ok=function(){alert('OK! Cookie do Menudino copiado ('+c.length+' chars). Volte ao cardapio-admin e clique em "Colar e sincronizar".');};var fail=function(err){var ta=document.createElement('textarea');ta.value=c;ta.style.position='fixed';ta.style.top='0';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();try{var r=document.execCommand('copy');document.body.removeChild(ta);if(r){ok();return;}}catch(e){try{document.body.removeChild(ta);}catch(e2){}}prompt('Nao consegui copiar automaticamente. Selecione tudo (Ctrl+A) e copie (Ctrl+C):',c);};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(c).then(ok,fail);}else{fail();}}catch(e){alert('Erro no bookmarklet: '+e.message);}})();`
 
 export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onSyncComplete }) {
   const [menudinoUrl, setMenudinoUrl] = useState('')
@@ -104,17 +107,52 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
     setClipboardChecked(true)
     try {
       const text = await navigator.clipboard.readText()
-      if (!text || text.indexOf('app-access-token') === -1) {
-        setError('Não achei o cookie do Menudino no clipboard. Verifique se você clicou no bookmarklet enquanto estava na página do seu Menudino.')
+      if (!text) {
+        setError('O clipboard está vazio. Clique no bookmarklet "Copiar cookie Menudino" na barra de favoritos (estando na página do Menudino) e tente de novo.')
         setShowManualPaste(true)
         return
       }
+      if (text.indexOf('app-access-token') === -1) {
+        const preview = text.length > 200 ? text.slice(0, 200) + '…' : text
+        setError(
+          `Encontrei algo no clipboard mas não tem "app-access-token".\n\n` +
+          `Tamanho: ${text.length} caracteres\n` +
+          `Início do conteúdo: "${preview}"\n\n` +
+          `Verifique se você clicou no bookmarklet na página do Menudino — ele vai mostrar um alert "OK! Cookie do Menudino copiado". ` +
+          `Se não apareceu esse alert, pode ser que o bookmarklet nem tenha rodado (certifique-se de clicar nele ESTANDO na aba do Menudino, não aqui no cardapio-admin).`
+        )
+        setShowManualPaste(true)
+        // Pré-preenche o textarea manual com o que foi lido — talvez o user consiga editar
+        setCookie(text)
+        return
+      }
       setCookie(text)
-      // Dispara sync direto — sem esperar o user clicar em outro botão
       await doSync(text)
     } catch (e) {
-      setError('Não consegui ler o clipboard automaticamente (seu browser pode não ter permitido). Use o modo manual abaixo.')
+      setError(
+        'Não consegui ler o clipboard automaticamente. Isto pode acontecer se:\n' +
+        '• Seu browser pediu permissão e você negou/ignorou\n' +
+        '• O foco não está na janela do admin (clique nesta janela antes de clicar no botão)\n' +
+        '• Estamos em HTTP (precisa ser HTTPS ou localhost)\n\n' +
+        `Detalhes: ${e.message || e}\n\n` +
+        'Use o modo manual abaixo — cole direto no textarea.'
+      )
       setShowManualPaste(true)
+    }
+  }
+
+  const handleTestClipboard = async () => {
+    setError(null)
+    try {
+      const text = await navigator.clipboard.readText()
+      const preview = !text ? '(vazio)' : (text.length > 300 ? text.slice(0, 300) + '…' : text)
+      const hasToken = text && text.indexOf('app-access-token') !== -1
+      alert(
+        `Conteúdo do clipboard (${text ? text.length : 0} chars):\n\n${preview}\n\n` +
+        `Contém "app-access-token"? ${hasToken ? 'SIM ✓' : 'NÃO ✗'}`
+      )
+    } catch (e) {
+      alert('Erro ao ler o clipboard: ' + (e.message || e))
     }
   }
 
@@ -230,28 +268,38 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
               </div>
 
               {/* Botão principal: colar do clipboard */}
-              <button
-                onClick={handlePasteFromClipboard}
-                disabled={loading}
-                className="w-full px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-bold text-sm shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 mb-3"
-              >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                    </svg>
-                    Sincronizando...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    Colar e sincronizar
-                  </>
-                )}
-              </button>
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={handlePasteFromClipboard}
+                  disabled={loading}
+                  className="flex-1 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-bold text-sm shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                      </svg>
+                      Sincronizando...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      Colar e sincronizar
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handleTestClipboard}
+                  disabled={loading}
+                  title="Ver o que está atualmente no clipboard"
+                  className="px-3 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs disabled:opacity-50"
+                >
+                  🔍 Testar clipboard
+                </button>
+              </div>
 
               {/* Fallback manual */}
               {(showManualPaste || clipboardChecked) && !loading && (
@@ -299,7 +347,7 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
           {error && (
             <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">
               <div className="font-bold mb-1">Erro</div>
-              <div>{error}</div>
+              <div className="whitespace-pre-wrap break-words">{error}</div>
             </div>
           )}
 
