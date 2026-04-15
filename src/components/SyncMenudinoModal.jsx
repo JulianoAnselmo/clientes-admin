@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { db } from '../firebase'
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
-import { syncMenudinoCardapio } from '../lib/menudino-sync'
+import { syncMenudinoCardapio, tryParseBookmarkletPayload } from '../lib/menudino-sync'
 
 /**
  * Modal para sincronizar o cardápio a partir do Menudino.
@@ -15,12 +15,18 @@ import { syncMenudinoCardapio } from '../lib/menudino-sync'
  * Fallback: se o clipboard API não funcionar, há um textarea para colar manualmente.
  */
 
-// Bookmarklet robusto que:
-//  1. Valida que o user está em *.menudino.com
-//  2. Valida que document.cookie contém app-access-token
-//  3. Tenta navigator.clipboard.writeText com fallback execCommand e prompt
-//  4. Dá feedback claro em cada passo
-const BOOKMARKLET_CODE = `javascript:(function(){try{var h=location.hostname;if(h.indexOf('menudino.com')===-1){alert('Voce nao esta no site do Menudino. Host atual: '+h);return;}var c=document.cookie||'';if(!c){alert('document.cookie vazio. Recarregue a pagina do Menudino e tente de novo.');return;}if(c.indexOf('app-access-token')===-1){alert('Nenhum cookie "app-access-token" encontrado. Cookies disponiveis: '+c.split(';').map(function(p){return p.trim().split('=')[0];}).join(', '));return;}var ok=function(){alert('OK! Cookie do Menudino copiado ('+c.length+' chars). Volte ao cardapio-admin e clique em "Colar e sincronizar".');};var fail=function(err){var ta=document.createElement('textarea');ta.value=c;ta.style.position='fixed';ta.style.top='0';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();try{var r=document.execCommand('copy');document.body.removeChild(ta);if(r){ok();return;}}catch(e){try{document.body.removeChild(ta);}catch(e2){}}prompt('Nao consegui copiar automaticamente. Selecione tudo (Ctrl+A) e copie (Ctrl+C):',c);};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(c).then(ok,fail);}else{fail();}}catch(e){alert('Erro no bookmarklet: '+e.message);}})();`
+// Bookmarklet que busca TUDO do Menudino (token, merchant, categorias, items)
+// e copia um payload JSON pronto pro clipboard. O cardapio-admin só precisa
+// ler esse JSON, processar e gravar no Firestore.
+//
+// Passos:
+//   1. Valida que o user está em *.menudino.com
+//   2. fetch('/') para pegar app-access-token do header e merchantId do HTML
+//   3. fetch merchant details, categorias e items via API (com Authorization)
+//   4. Copia JSON do payload pro clipboard (com fallback execCommand/prompt)
+//
+// Qualquer erro em qualquer passo aparece em alert com mensagem clara.
+const BOOKMARKLET_CODE = `javascript:(async()=>{try{if(!location.hostname.includes('menudino.com')){alert('Voce nao esta em *.menudino.com. Host: '+location.hostname);return;}var r=await fetch('/',{cache:'no-store'});if(!r.ok){alert('fetch / falhou: HTTP '+r.status);return;}var t=r.headers.get('app-access-token');if(!t){alert('Sem header app-access-token. O site pode ter mudado.');return;}var h=await r.text(),m=h.match(/merchantSummary[\\\\"\\s:{]*id[\\\\"\\s:]*([a-f0-9-]{36})/);if(!m){alert('Nao achei merchantId no HTML. O site pode ter mudado.');return;}var mid=m[1],a={headers:{Authorization:'Bearer '+t}},cb='https://menudino-catalog.consumerapis.com/api/v1',mb='https://menudino-merchants.consumerapis.com/api/v1';var me=await(await fetch(mb+'/merchants/'+mid,a)).json();var cr=await(await fetch(cb+'/categories/'+mid+'?OnlyActive=false',a)).json();var cs=cr.items||[];var it={},tt=0;for(var i=0;i<cs.length;i++){var ir=await(await fetch(cb+'/items/'+mid+'/'+cs[i].id+'/summary?SellOnline=false',a)).json();it[cs[i].id]=ir.items||[];tt+=it[cs[i].id].length;}var p=JSON.stringify({version:1,merchant:me,categories:cs,itemsByCategoryId:it});var ok=function(){alert('OK! '+cs.length+' categorias e '+tt+' items copiados ('+p.length+' chars). Volte ao cardapio-admin e clique em Colar e sincronizar.');};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(p).then(ok,function(){var x=document.createElement('textarea');x.value=p;x.style.position='fixed';x.style.top='0';x.style.opacity='0';document.body.appendChild(x);x.focus();x.select();try{document.execCommand('copy');document.body.removeChild(x);ok();}catch(e){document.body.removeChild(x);prompt('Copie:',p);}});}else{prompt('Copie:',p);}}catch(e){alert('Erro no bookmarklet: '+(e&&e.message||e));}})();`
 
 export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onSyncComplete }) {
   const [menudinoUrl, setMenudinoUrl] = useState('')
@@ -69,7 +75,7 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
     })()
   }, [isOpen, restaurantSlug])
 
-  const doSync = useCallback(async (cookieToUse) => {
+  const doSync = useCallback(async (pastedData) => {
     setLoading(true)
     setError(null)
     setSuccess(null)
@@ -77,7 +83,7 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
 
     try {
       const result = await syncMenudinoCardapio({
-        cookieString: cookieToUse,
+        pastedData,
         firestore: db,
         restaurantSlug,
         firestoreOps: { doc, getDoc, setDoc },
@@ -102,27 +108,37 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
     }
   }, [restaurantSlug, menudinoUrl, onSyncComplete])
 
+  const validarConteudo = (text) => {
+    if (!text) return { ok: false, reason: 'vazio' }
+    // Se começa com { é o novo payload JSON do bookmarklet
+    const bp = tryParseBookmarkletPayload(text)
+    if (bp) return { ok: true, kind: 'bookmarklet', totalItems: Object.values(bp.itemsByCategoryId).reduce((a, xs) => a + xs.length, 0) }
+    // Legado: cookie string
+    if (text.indexOf('app-access-token') !== -1) return { ok: true, kind: 'cookie' }
+    return { ok: false, reason: 'nenhum formato reconhecido' }
+  }
+
   const handlePasteFromClipboard = async () => {
     setError(null)
     setClipboardChecked(true)
     try {
       const text = await navigator.clipboard.readText()
       if (!text) {
-        setError('O clipboard está vazio. Clique no bookmarklet "Copiar cookie Menudino" na barra de favoritos (estando na página do Menudino) e tente de novo.')
+        setError('O clipboard está vazio. Clique no bookmarklet "Sincronizar Menudino" na barra de favoritos (estando na página do Menudino) e tente de novo.')
         setShowManualPaste(true)
         return
       }
-      if (text.indexOf('app-access-token') === -1) {
+      const v = validarConteudo(text)
+      if (!v.ok) {
         const preview = text.length > 200 ? text.slice(0, 200) + '…' : text
         setError(
-          `Encontrei algo no clipboard mas não tem "app-access-token".\n\n` +
+          `Encontrei algo no clipboard mas não reconheci o formato.\n\n` +
           `Tamanho: ${text.length} caracteres\n` +
-          `Início do conteúdo: "${preview}"\n\n` +
-          `Verifique se você clicou no bookmarklet na página do Menudino — ele vai mostrar um alert "OK! Cookie do Menudino copiado". ` +
-          `Se não apareceu esse alert, pode ser que o bookmarklet nem tenha rodado (certifique-se de clicar nele ESTANDO na aba do Menudino, não aqui no cardapio-admin).`
+          `Início: "${preview}"\n\n` +
+          `Esperado: um JSON do bookmarklet (começando com "{") ou uma string de cookie com "app-access-token=".\n\n` +
+          `Certifique-se de clicar no bookmarklet ESTANDO na aba do Menudino (não no cardapio-admin) e aguardar o alert "OK! ... copiados" antes de voltar aqui.`
         )
         setShowManualPaste(true)
-        // Pré-preenche o textarea manual com o que foi lido — talvez o user consiga editar
         setCookie(text)
         return
       }
@@ -146,10 +162,10 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
     try {
       const text = await navigator.clipboard.readText()
       const preview = !text ? '(vazio)' : (text.length > 300 ? text.slice(0, 300) + '…' : text)
-      const hasToken = text && text.indexOf('app-access-token') !== -1
+      const v = validarConteudo(text || '')
+      const kindMsg = v.ok ? (v.kind === 'bookmarklet' ? `JSON do bookmarklet (${v.totalItems} items)` : 'Cookie string (legado)') : `Não reconhecido (${v.reason})`
       alert(
-        `Conteúdo do clipboard (${text ? text.length : 0} chars):\n\n${preview}\n\n` +
-        `Contém "app-access-token"? ${hasToken ? 'SIM ✓' : 'NÃO ✗'}`
+        `Clipboard (${text ? text.length : 0} chars):\n\n${preview}\n\nFormato: ${kindMsg}`
       )
     } catch (e) {
       alert('Erro ao ler o clipboard: ' + (e.message || e))
@@ -199,13 +215,13 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
           {!success && (
             <>
               {/* Setup primeira vez: bookmarklet */}
-              <details className="mb-4 border border-slate-200 rounded-xl overflow-hidden group">
+              <details open className="mb-4 border border-slate-200 rounded-xl overflow-hidden group">
                 <summary className="px-4 py-3 bg-slate-50 cursor-pointer text-sm font-medium text-slate-700 hover:bg-slate-100 select-none">
-                  🔖 Primeira vez? Instale o atalho (1x só)
+                  🔖 Instale o atalho (1x só)
                 </summary>
                 <div className="px-4 py-3 text-sm text-slate-600 space-y-2 border-t border-slate-200">
                   <p>
-                    <b>Arraste</b> o botão laranja abaixo pra sua <b>barra de favoritos</b> do browser:
+                    Garanta que sua <b>barra de favoritos</b> esteja visível (<kbd className="border px-1 rounded text-xs">Ctrl</kbd>+<kbd className="border px-1 rounded text-xs">Shift</kbd>+<kbd className="border px-1 rounded text-xs">B</kbd>) e depois <b>arraste</b> o botão laranja abaixo pra ela:
                   </p>
                   <div className="flex items-center gap-3 py-2">
                     {/* eslint-disable-next-line react/jsx-no-script-url */}
@@ -213,17 +229,17 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
                       href={BOOKMARKLET_CODE}
                       onClick={e => {
                         e.preventDefault()
-                        alert('Arraste este botão para a sua barra de favoritos. Não clique — arraste!')
+                        alert('Não clique — arraste este botão para a sua barra de favoritos!')
                       }}
                       draggable
                       className="px-4 py-2 rounded-lg bg-amber-500 text-white font-medium text-sm hover:bg-amber-600 shadow-sm select-none cursor-grab active:cursor-grabbing"
                     >
-                      📋 Copiar cookie Menudino
+                      🍽️ Sincronizar Menudino
                     </a>
                     <span className="text-xs text-slate-500">← arraste pra barra de favoritos</span>
                   </div>
                   <p className="text-xs text-slate-500">
-                    Depois de instalado, para sincronizar basta: abrir o site do Menudino → clicar no botão na barra de favoritos → voltar aqui e colar.
+                    O bookmarklet puxa categorias + items + horários do Menudino e copia tudo pro clipboard em JSON.
                   </p>
                 </div>
               </details>
@@ -261,9 +277,10 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm text-slate-700">
                 <div className="font-bold mb-2 text-slate-800">Depois de abrir o Menudino:</div>
                 <ol className="list-decimal pl-5 space-y-1 text-slate-600">
-                  <li>Aguarda a página carregar</li>
-                  <li>Clica no botão <b>"Copiar cookie Menudino"</b> na sua barra de favoritos</li>
-                  <li>Volta aqui e clica em <b>"Colar e sincronizar"</b> abaixo</li>
+                  <li>Aguarde a página carregar completamente</li>
+                  <li>Clique no atalho <b>"🍽️ Sincronizar Menudino"</b> na sua barra de favoritos</li>
+                  <li>Aguarde o alert dizer quantos items foram copiados</li>
+                  <li>Volte aqui e clique em <b>"Colar e sincronizar"</b> abaixo</li>
                 </ol>
               </div>
 

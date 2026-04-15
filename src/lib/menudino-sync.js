@@ -424,51 +424,95 @@ export function mergeCardapio(atual, novo) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Tenta parsear um payload JSON já buscado pelo bookmarklet.
+ * Formato esperado: { version, merchant, categories, itemsByCategoryId }
+ * Retorna `null` se não é um payload válido.
+ */
+export function tryParseBookmarkletPayload(text) {
+  if (!text || typeof text !== 'string') return null;
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{')) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && parsed.merchant && Array.isArray(parsed.categories) && parsed.itemsByCategoryId) {
+      return parsed;
+    }
+  } catch (e) { /* não é JSON válido */ }
+  return null;
+}
+
+/**
  * Executa a sincronização completa.
+ *
+ * Aceita DOIS formatos de entrada em `pastedData`:
+ *   1. **Payload JSON do bookmarklet** (preferido) — um objeto com merchant,
+ *      categories e itemsByCategoryId já buscados. Nesse caso, a função não
+ *      chama nenhuma API do Menudino — só processa e grava no Firestore.
+ *   2. **Cookie string** (legado) — a string `app-access-token=...; merchant-summary=...`.
+ *      Nesse caso, a função extrai o token + merchantId e chama as APIs
+ *      do Menudino diretamente (requer CORS permissivo, que já testamos OK).
+ *
  * @param {Object} params
- * @param {string} params.cookieString - cookie colado pelo user
+ * @param {string} params.pastedData - texto que o user colou (JSON ou cookie)
  * @param {Object} params.firestore - instância do Firestore (db)
- * @param {string} params.restaurantSlug - slug do restaurant (ex: 'marieta-bistro')
+ * @param {string} params.restaurantSlug - slug do restaurant
  * @param {Function} [params.onLog] - callback(string) chamado para cada linha de log
  * @param {Object} params.firestoreOps - { doc, getDoc, setDoc } do firebase/firestore
  * @returns {Promise<{stats, estruturaFinal}>}
  */
-export async function syncMenudinoCardapio({ cookieString, firestore, restaurantSlug, onLog, firestoreOps }) {
+export async function syncMenudinoCardapio({ pastedData, cookieString, firestore, restaurantSlug, onLog, firestoreOps }) {
   const log = onLog || (() => {});
   const { doc, getDoc, setDoc } = firestoreOps;
 
-  log('Analisando cookie...');
-  const { token, merchantId, merchantName } = parseCookieString(cookieString);
-  if (!merchantId) {
-    throw new Error('Cookie não contém "merchant-summary" — é preciso copiar o document.cookie a partir da página do seu cardápio (ex: https://SEURESTAURANTE.menudino.com/).');
-  }
-  log(`OK — ${merchantName || 'merchant'} (${merchantId.slice(0, 8)}...)`);
+  // Compat: aceita o nome antigo `cookieString` também
+  const input = pastedData || cookieString || '';
 
-  log('Buscando merchant details...');
-  const merchant = await fetchMerchantDetails(token, merchantId);
-  log(`OK — ${merchant.name}, ${merchant.address && merchant.address.city}`);
+  let merchant, categories, itemsByCategoryId, totalItems = 0;
 
-  log('Buscando categorias...');
-  const categories = await fetchCategories(token, merchantId);
-  log(`OK — ${categories.length} categorias`);
-
-  log('Buscando items de cada categoria...');
-  const itemsByCategoryId = {};
-  let totalItems = 0;
-  for (let i = 0; i < categories.length; i++) {
-    const cat = categories[i];
-    if (i > 0) await new Promise(r => setTimeout(r, 80));
-    try {
-      const items = await fetchItems(token, merchantId, cat.id);
-      itemsByCategoryId[cat.id] = items;
-      totalItems += items.length;
-      log(`  [${i + 1}/${categories.length}] ${cat.name}: ${items.length}`);
-    } catch (e) {
-      log(`  [${i + 1}/${categories.length}] ${cat.name}: ERRO — ${e.message}`);
-      itemsByCategoryId[cat.id] = [];
+  // Caminho 1: payload JSON do bookmarklet (sem fetch)
+  const bookmarkletPayload = tryParseBookmarkletPayload(input);
+  if (bookmarkletPayload) {
+    log('Payload do bookmarklet detectado — dados já vêm prontos.');
+    merchant = bookmarkletPayload.merchant;
+    categories = bookmarkletPayload.categories;
+    itemsByCategoryId = bookmarkletPayload.itemsByCategoryId;
+    Object.keys(itemsByCategoryId).forEach(k => { totalItems += itemsByCategoryId[k].length; });
+    log(`Merchant: ${merchant.name}`);
+    log(`Categorias: ${categories.length}, items totais: ${totalItems}`);
+  } else {
+    // Caminho 2: cookie string (fetch direto das APIs)
+    log('Analisando cookie...');
+    const { token, merchantId, merchantName } = parseCookieString(input);
+    if (!merchantId) {
+      throw new Error('Cookie não contém "merchant-summary" — é preciso copiar o document.cookie a partir da página do seu cardápio (ex: https://SEURESTAURANTE.menudino.com/), ou usar o bookmarklet.');
     }
+    log(`OK — ${merchantName || 'merchant'} (${merchantId.slice(0, 8)}...)`);
+
+    log('Buscando merchant details...');
+    merchant = await fetchMerchantDetails(token, merchantId);
+    log(`OK — ${merchant.name}, ${merchant.address && merchant.address.city}`);
+
+    log('Buscando categorias...');
+    categories = await fetchCategories(token, merchantId);
+    log(`OK — ${categories.length} categorias`);
+
+    log('Buscando items de cada categoria...');
+    itemsByCategoryId = {};
+    for (let i = 0; i < categories.length; i++) {
+      const cat = categories[i];
+      if (i > 0) await new Promise(r => setTimeout(r, 80));
+      try {
+        const items = await fetchItems(token, merchantId, cat.id);
+        itemsByCategoryId[cat.id] = items;
+        totalItems += items.length;
+        log(`  [${i + 1}/${categories.length}] ${cat.name}: ${items.length}`);
+      } catch (e) {
+        log(`  [${i + 1}/${categories.length}] ${cat.name}: ERRO — ${e.message}`);
+        itemsByCategoryId[cat.id] = [];
+      }
+    }
+    log(`Total: ${totalItems} items`);
   }
-  log(`Total: ${totalItems} items`);
 
   log('Lendo cardápio atual do Firestore...');
   const dataCol = `restaurants/${restaurantSlug}/data`;
