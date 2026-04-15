@@ -224,9 +224,18 @@ export default function SyncMenudinoModal({ isOpen, onClose, restaurantSlug, onS
                     Garanta que sua <b>barra de favoritos</b> esteja visível (<kbd className="border px-1 rounded text-xs">Ctrl</kbd>+<kbd className="border px-1 rounded text-xs">Shift</kbd>+<kbd className="border px-1 rounded text-xs">B</kbd>) e depois <b>arraste</b> o botão laranja abaixo pra ela:
                   </p>
                   <div className="flex items-center gap-3 py-2">
-                    {/* eslint-disable-next-line react/jsx-no-script-url */}
+                    {/*
+                      React 18+ bloqueia `javascript:` URLs em href como precaução
+                      anti-XSS — o href é substituído por um stub que joga erro ao
+                      clicar. Isso quebra o drag-to-bookmarks. Contornamos setando
+                      o href via ref + setAttribute depois que React renderiza, que
+                      escapa da sanitização porque React não sabe do valor setado
+                      manualmente.
+                    */}
                     <a
-                      href={BOOKMARKLET_CODE}
+                      ref={el => {
+                        if (el) el.setAttribute('href', BOOKMARKLET_CODE)
+                      }}
                       onClick={e => {
                         e.preventDefault()
                         alert('Não clique — arraste este botão para a sua barra de favoritos!')
