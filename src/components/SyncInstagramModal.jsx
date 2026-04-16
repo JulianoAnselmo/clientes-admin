@@ -10,21 +10,21 @@ import { useState } from 'react'
  * pro Firebase Storage e grava o array no Firestore.
  */
 
-const WORKER_URL = import.meta.env.VITE_INSTAGRAM_SYNC_WORKER_URL
-  || import.meta.env.VITE_MENUDINO_SYNC_WORKER_URL
-  || ''
+const RELAY_URL = 'https://marietabistro.com.br/sync-instagram.html'
 const SYNC_SECRET = import.meta.env.VITE_MENUDINO_SYNC_SECRET || ''
-const BOOKMARKLET_CONFIGURED = !!(WORKER_URL && SYNC_SECRET)
+const BOOKMARKLET_CONFIGURED = !!SYNC_SECRET
 
-// Código do bookmarklet (single-line). text/plain evita preflight CORS.
+// Código do bookmarklet (single-line). Contorna o CSP do Instagram (que bloqueia
+// fetch pro Cloudflare Worker) navegando pra uma relay page no nosso domínio
+// — a relay faz o POST e mostra o resultado sem restrições.
 // Procura posts no grid do perfil via <a href="/p/...">/<a href="/reel/...">.
-function buildBookmarkletCode(workerUrl, secret) {
-  return `(async()=>{try{if(!location.hostname.includes('instagram.com')){alert('Abra instagram.com/marieta_bistro primeiro (esta em: '+location.hostname+')');return;}var links=document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]');if(!links.length){alert('Nenhum post encontrado. Role um pouco ou abra o perfil @marieta_bistro.');return;}var posts=[];var seen=new Set();for(var i=0;i<links.length&&posts.length<9;i++){var a=links[i];var img=a.querySelector('img');if(!img||!img.src)continue;if(seen.has(a.href))continue;seen.add(a.href);posts.push({imageUrl:img.src,postUrl:a.href,alt:img.alt||''});}if(!posts.length){alert('Nenhum post com imagem encontrado no grid.');return;}if(!confirm('Enviar '+posts.length+' posts para o site?'))return;var res=await fetch('${workerUrl}',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({kind:'instagram',secret:'${secret}',posts:posts})});var data=await res.json();if(data.ok){alert('OK! '+data.stats.count+' posts sincronizados.');}else{alert('Erro do servidor: '+(data.error||'desconhecido'));}}catch(e){alert('Erro: '+(e&&e.message||e));}})();void 0;`
+function buildBookmarkletCode(relayUrl, secret) {
+  return `(()=>{try{if(!location.hostname.includes('instagram.com')){alert('Abra instagram.com/marieta_bistro primeiro (esta em: '+location.hostname+')');return;}var links=document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]');if(!links.length){alert('Nenhum post encontrado. Role um pouco ou abra o perfil @marieta_bistro.');return;}var posts=[];var seen=new Set();for(var i=0;i<links.length&&posts.length<9;i++){var a=links[i];var img=a.querySelector('img');if(!img||!img.src)continue;if(seen.has(a.href))continue;seen.add(a.href);posts.push({imageUrl:img.src,postUrl:a.href,alt:img.alt||''});}if(!posts.length){alert('Nenhum post com imagem encontrado no grid.');return;}if(!confirm('Enviar '+posts.length+' posts para o site?'))return;var payload={kind:'instagram',secret:'${secret}',posts:posts};location.href='${relayUrl}#'+encodeURIComponent(JSON.stringify(payload));}catch(e){alert('Erro: '+(e&&e.message||e));}})();void 0;`
 }
 
 function buildBookmarkletAnchorHTML() {
   if (!BOOKMARKLET_CONFIGURED) return null
-  const code = buildBookmarkletCode(WORKER_URL, SYNC_SECRET)
+  const code = buildBookmarkletCode(RELAY_URL, SYNC_SECRET)
   const href = `javascript:${encodeURIComponent(code)}`
   return `<a href="${href}" draggable="true" title="Arraste pra barra de favoritos. Depois, estando no Instagram, clique pra sincronizar." style="display:inline-block;padding:12px 20px;background:linear-gradient(135deg,#d946ef,#a855f7);color:white;border-radius:8px;font-weight:700;text-decoration:none;cursor:move;box-shadow:0 2px 4px rgba(0,0,0,0.1);user-select:none">📸 Sincronizar Instagram</a>`
 }
@@ -105,10 +105,8 @@ export default function SyncInstagramModal({ isOpen, onClose, instagramUrl, onSy
             <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-900">
               <div className="font-bold mb-1">Sync automática não configurada</div>
               <p className="text-xs">
-                As variáveis <code className="bg-white px-1 rounded">VITE_INSTAGRAM_SYNC_WORKER_URL</code>{' '}
-                (ou <code className="bg-white px-1 rounded">VITE_MENUDINO_SYNC_WORKER_URL</code>) e{' '}
-                <code className="bg-white px-1 rounded">VITE_MENUDINO_SYNC_SECRET</code> não estão definidas
-                neste build.
+                A variável <code className="bg-white px-1 rounded">VITE_MENUDINO_SYNC_SECRET</code>{' '}
+                não está definida neste build.
               </p>
             </div>
           ) : showTutorial ? (
@@ -133,7 +131,7 @@ export default function SyncInstagramModal({ isOpen, onClose, instagramUrl, onSy
                 <ol className="text-sm text-slate-700 space-y-1.5 mb-4 list-decimal pl-5">
                   <li><b>Arraste</b> o botão rosa abaixo pra barra de favoritos do navegador (só precisa fazer isso uma vez).</li>
                   <li>Abra o Instagram no perfil <b>@marieta_bistro</b> em outra aba (já logado).</li>
-                  <li><b>Clique no favorito</b> — as 9 últimas fotos sobem pro site em ~10s.</li>
+                  <li><b>Clique no favorito</b> — você será redirecionado pra tela de sincronização com o resultado.</li>
                 </ol>
 
                 <div className="flex items-center gap-3 flex-wrap">
@@ -156,10 +154,11 @@ export default function SyncInstagramModal({ isOpen, onClose, instagramUrl, onSy
               </div>
 
               <div className="mt-4 text-[11px] text-slate-500 bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <b className="text-slate-600">Por que bookmarklet?</b>{' '}
-                O Instagram bloqueia scraping de servidores (data centers). Rodando no seu navegador —
-                com sua sessão e IP residencial — ele deixa ler o grid normalmente. As imagens são então
-                enviadas pro nosso servidor, que sobe pro Firebase.
+                <b className="text-slate-600">Como funciona:</b>{' '}
+                O bookmarklet lê as 9 últimas fotos do grid no Instagram (no seu navegador,
+                com sua sessão logada — data centers são bloqueados pelo IG), e redireciona
+                pra uma página no nosso domínio que envia pro servidor. As imagens são baixadas
+                e publicadas direto no site.
               </div>
             </>
           )}
@@ -293,7 +292,7 @@ function TutorialView({ onBack }) {
         </div>
         <div className="flex gap-3">
           <div className="flex-shrink-0 w-6 h-6 rounded-full bg-fuchsia-600 text-white font-bold flex items-center justify-center text-xs">4</div>
-          <p>No futuro, estando na aba do Instagram (<b>@marieta_bistro</b>), é só <b>clicar no favorito</b> e confirmar o envio.</p>
+          <p>No futuro, estando na aba do Instagram (<b>@marieta_bistro</b>), <b>clique no favorito</b> e confirme. A aba é redirecionada pra tela de resultado da sincronização.</p>
         </div>
       </div>
 

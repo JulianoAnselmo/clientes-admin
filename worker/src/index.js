@@ -29,7 +29,7 @@ import {
 
 const ALLOWED_ORIGINS = [
   'https://marietabistro.menudino.com',
-  'https://www.instagram.com'
+  'https://marietabistro.com.br'
 ];
 const PROJECT_ID = 'cardapio-admin-prod';
 const STORAGE_BUCKET = 'cardapio-admin-prod.firebasestorage.app';
