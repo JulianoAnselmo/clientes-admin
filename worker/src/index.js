@@ -355,23 +355,24 @@ async function uploadInstagramPost(post, index, accessToken) {
   const contentType = imgRes.headers.get('Content-Type') || 'image/jpeg';
   const bytes = await imgRes.arrayBuffer();
 
-  // 2. Sobe pro Firebase Storage via GCS JSON upload API.
-  // (firebasestorage.googleapis.com/v0 n\u00e3o aceita uploadType=media; a API
-  // oficial do Google Cloud Storage aceita, e o token custom metadata
-  // `firebaseStorageDownloadTokens` funciona igual — gera URL publica.)
+  // 2. Sobe pro Firebase Storage via GCS multipart upload — single request
+  // que envia objeto + metadata. O metadata `firebaseStorageDownloadTokens`
+  // eh lido pela API Firebase Storage v0 para autorizar download publico
+  // via URL com ?token=<uuid>.
   const token = crypto.randomUUID();
   const objectPath = `instagram/${RESTAURANT_SLUG}/post_${index + 1}.jpg`;
   const encodedPath = encodeURIComponent(objectPath);
-  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${STORAGE_BUCKET}/o?uploadType=media&name=${encodedPath}`;
+
+  const body = buildMultipartBody(objectPath, contentType, token, new Uint8Array(bytes));
+  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${STORAGE_BUCKET}/o?uploadType=multipart`;
 
   const upRes = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      'Content-Type': contentType,
-      'x-goog-meta-firebaseStorageDownloadTokens': token
+      'Content-Type': `multipart/related; boundary=${MULTIPART_BOUNDARY}`
     },
-    body: bytes
+    body: body
   });
   if (!upRes.ok) {
     const txt = await upRes.text();
@@ -382,4 +383,33 @@ async function uploadInstagramPost(post, index, accessToken) {
   // firebaseStorageDownloadTokens que setamos no upload).
   const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/${encodedPath}?alt=media&token=${token}`;
   return { publicUrl };
+}
+
+const MULTIPART_BOUNDARY = 'CFWorkerBoundary_' + 'x'.repeat(24);
+
+// Monta o body multipart/related para upload via GCS JSON API.
+// Parte 1: metadata JSON (name, contentType, metadata.firebaseStorageDownloadTokens)
+// Parte 2: bytes da imagem
+function buildMultipartBody(objectPath, contentType, downloadToken, bytes) {
+  const enc = new TextEncoder();
+  const metadataJson = JSON.stringify({
+    name: objectPath,
+    contentType: contentType,
+    metadata: { firebaseStorageDownloadTokens: downloadToken }
+  });
+
+  const prefix = enc.encode(
+    `--${MULTIPART_BOUNDARY}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+    metadataJson + `\r\n` +
+    `--${MULTIPART_BOUNDARY}\r\n` +
+    `Content-Type: ${contentType}\r\n\r\n`
+  );
+  const suffix = enc.encode(`\r\n--${MULTIPART_BOUNDARY}--`);
+
+  const out = new Uint8Array(prefix.length + bytes.length + suffix.length);
+  out.set(prefix, 0);
+  out.set(bytes, prefix.length);
+  out.set(suffix, prefix.length + bytes.length);
+  return out;
 }
