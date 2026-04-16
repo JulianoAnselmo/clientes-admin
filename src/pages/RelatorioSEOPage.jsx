@@ -112,13 +112,19 @@ async function fetchSummary(siteUrl, token, startDate, endDate) {
   return resp.json()
 }
 
-async function fetchGoatCounter(gcUrl, token, endpoint, params = {}) {
+async function fetchGoatCounter(gcUrl, token, endpoint, params = {}, attempt = 0) {
   const base = gcUrl.replace(/\/$/, '')
   const url = new URL(`${base}/api/v0/${endpoint}`)
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
   const resp = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
   })
+  if (resp.status === 429 && attempt < 4) {
+    const retryAfter = parseInt(resp.headers.get('Retry-After') || '0', 10)
+    const waitMs = (retryAfter > 0 ? retryAfter : Math.pow(2, attempt)) * 1000
+    await new Promise(r => setTimeout(r, waitMs))
+    return fetchGoatCounter(gcUrl, token, endpoint, params, attempt + 1)
+  }
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}))
     throw new Error(err.error || `GoatCounter ${resp.status}`)
@@ -313,11 +319,12 @@ export default function RelatorioSEOPage() {
         if (!gcUrl || !gcToken) return
 
         const params = { start: startDate, end: endDate }
-        const [totalData, hitsData, refsData] = await Promise.all([
-          fetchGoatCounter(gcUrl, gcToken, 'stats/total', params),
-          fetchGoatCounter(gcUrl, gcToken, 'stats/hits', { ...params, limit: 10 }),
-          fetchGoatCounter(gcUrl, gcToken, 'stats/toprefs', { ...params, limit: 5 }),
-        ])
+        // Sequencial para evitar 429 do GoatCounter (limite agressivo no /stats/*)
+        const totalData = await fetchGoatCounter(gcUrl, gcToken, 'stats/total', params)
+        await new Promise(r => setTimeout(r, 350))
+        const hitsData = await fetchGoatCounter(gcUrl, gcToken, 'stats/hits', { ...params, limit: 10 })
+        await new Promise(r => setTimeout(r, 350))
+        const refsData = await fetchGoatCounter(gcUrl, gcToken, 'stats/toprefs', { ...params, limit: 5 })
 
         const hits = (hitsData.hits || []).map(h => ({
           path: h.path || h.name || '/',
