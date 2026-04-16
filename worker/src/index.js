@@ -32,7 +32,12 @@ const ALLOWED_ORIGINS = [
   'https://marietabistro.com.br'
 ];
 const PROJECT_ID = 'cardapio-admin-prod';
-const STORAGE_BUCKET = 'cardapio-admin-prod.firebasestorage.app';
+// Bucket GCS real do projeto. Firebase Console mostra o alias
+// `cardapio-admin-prod.firebasestorage.app` mas a GCS JSON API usa o
+// nome can\u00f4nico `<project>.appspot.com` (projetos pre-out-2024) ou
+// `<project>.firebasestorage.app` (projetos pos-out-2024). Se um der
+// 404 "bucket does not exist", trocar aqui.
+const STORAGE_BUCKET = 'cardapio-admin-prod.appspot.com';
 const RESTAURANT_SLUG = 'marieta-bistro';
 
 export default {
