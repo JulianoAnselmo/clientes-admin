@@ -263,102 +263,95 @@ export default function RelatorioSEOPage() {
     window.addEventListener('message', handleMessage)
   }
 
-  async function handleGenerateAll() {
+  async function handleGenerateGSC() {
     setGenerating(true)
-    setGcGenerating(true)
     setError('')
-    setGcError('')
     setReport(null)
-    setGcReport(null)
-
     const { startDate, endDate } = dateRangeRef.current
+    try {
+      const siteUrl = contract?.siteUrl
+      if (!siteUrl) throw new Error('Site URL não configurado para este cliente')
 
-    // GSC
-    const gscPromise = (async () => {
-      try {
-        const siteUrl = contract?.siteUrl
-        if (!siteUrl) throw new Error('Site URL não configurado para este cliente')
-
-        const token = await getValidToken()
-        if (!token) {
-          setNeedsAuth(true)
-          throw new Error('Token expirado. Reconecte o Google Search Console.')
-        }
-
-        const [summaryData, queriesData, pagesData] = await Promise.all([
-          fetchSummary(siteUrl, token, startDate, endDate),
-          fetchSearchAnalytics(siteUrl, token, 'query', startDate, endDate),
-          fetchSearchAnalytics(siteUrl, token, 'page', startDate, endDate),
-        ])
-
-        setReport({
-          period: { start: startDate, end: endDate },
-          summary: {
-            impressions: summaryData.rows?.[0]?.impressions || 0,
-            position: summaryData.rows?.[0]?.position || 0,
-          },
-          topQueries: (queriesData.rows || []).map(r => ({
-            query: r.keys[0],
-            impressions: r.impressions,
-          })),
-          topPages: (pagesData.rows || []).map(r => ({
-            page: r.keys[0],
-            impressions: r.impressions,
-          })),
-          generatedAt: new Date().toISOString(),
-        })
-      } catch (err) {
-        setError(err.message)
+      const token = await getValidToken()
+      if (!token) {
+        setNeedsAuth(true)
+        throw new Error('Token expirado. Reconecte o Google Search Console.')
       }
-      setGenerating(false)
-    })()
 
-    // GoatCounter
-    const gcPromise = (async () => {
-      try {
-        const gcUrl = contract?.goatcounterUrl
-        const gcToken = contract?.goatcounterToken
-        if (!gcUrl || !gcToken) return
+      const [summaryData, queriesData, pagesData] = await Promise.all([
+        fetchSummary(siteUrl, token, startDate, endDate),
+        fetchSearchAnalytics(siteUrl, token, 'query', startDate, endDate),
+        fetchSearchAnalytics(siteUrl, token, 'page', startDate, endDate),
+      ])
 
-        const params = { start: startDate, end: endDate }
-        // Sequencial para evitar 429 do GoatCounter (limite agressivo no /stats/*)
-        const totalData = await fetchGoatCounter(gcUrl, gcToken, 'stats/total', params)
-        await new Promise(r => setTimeout(r, 350))
-        const hitsData = await fetchGoatCounter(gcUrl, gcToken, 'stats/hits', { ...params, limit: 10 })
-        await new Promise(r => setTimeout(r, 350))
-        const refsData = await fetchGoatCounter(gcUrl, gcToken, 'stats/toprefs', { ...params, limit: 5 })
+      setReport({
+        period: { start: startDate, end: endDate },
+        summary: {
+          impressions: summaryData.rows?.[0]?.impressions || 0,
+          position: summaryData.rows?.[0]?.position || 0,
+        },
+        topQueries: (queriesData.rows || []).map(r => ({
+          query: r.keys[0],
+          impressions: r.impressions,
+        })),
+        topPages: (pagesData.rows || []).map(r => ({
+          page: r.keys[0],
+          impressions: r.impressions,
+        })),
+        generatedAt: new Date().toISOString(),
+      })
+    } catch (err) {
+      setError(err.message)
+    }
+    setGenerating(false)
+  }
 
-        const hits = (hitsData.hits || []).map(h => ({
-          path: h.path || h.name || '/',
-          title: h.title || '',
-          count: h.count || 0,
-          countUnique: h.count_unique || 0,
-        }))
-        const refs = (refsData.stats || []).map(r => ({
-          ref: r.name || '(direto)',
-          count: r.count || 0,
-          countUnique: r.count_unique || 0,
-        }))
+  async function handleGenerateGoatCounter() {
+    setGcGenerating(true)
+    setGcError('')
+    setGcReport(null)
+    const { startDate, endDate } = dateRangeRef.current
+    try {
+      const gcUrl = contract?.goatcounterUrl
+      const gcToken = contract?.goatcounterToken
+      if (!gcUrl || !gcToken) throw new Error('GoatCounter não configurado para este cliente')
 
-        setGcReport({
-          period: { start: startDate, end: endDate },
-          summary: {
-            pageviews: totalData.total || 0,
-            unique: totalData.total_unique || 0,
-            topPath: hits[0]?.path || '—',
-            topRef: refs[0]?.ref || 'Acesso direto',
-          },
-          topHits: hits,
-          topRefs: refs,
-          generatedAt: new Date().toISOString(),
-        })
-      } catch (err) {
-        setGcError(err.message)
-      }
-      setGcGenerating(false)
-    })()
+      const params = { start: startDate, end: endDate }
+      // Sequencial para evitar 429 do GoatCounter (limite agressivo no /stats/*)
+      const totalData = await fetchGoatCounter(gcUrl, gcToken, 'stats/total', params)
+      await new Promise(r => setTimeout(r, 350))
+      const hitsData = await fetchGoatCounter(gcUrl, gcToken, 'stats/hits', { ...params, limit: 10 })
+      await new Promise(r => setTimeout(r, 350))
+      const refsData = await fetchGoatCounter(gcUrl, gcToken, 'stats/toprefs', { ...params, limit: 5 })
 
-    await Promise.all([gscPromise, gcPromise])
+      const hits = (hitsData.hits || []).map(h => ({
+        path: h.path || h.name || '/',
+        title: h.title || '',
+        count: h.count || 0,
+        countUnique: h.count_unique || 0,
+      }))
+      const refs = (refsData.stats || []).map(r => ({
+        ref: r.name || '(direto)',
+        count: r.count || 0,
+        countUnique: r.count_unique || 0,
+      }))
+
+      setGcReport({
+        period: { start: startDate, end: endDate },
+        summary: {
+          pageviews: totalData.total || 0,
+          unique: totalData.total_unique || 0,
+          topPath: hits[0]?.path || '—',
+          topRef: refs[0]?.ref || 'Acesso direto',
+        },
+        topHits: hits,
+        topRefs: refs,
+        generatedAt: new Date().toISOString(),
+      })
+    } catch (err) {
+      setGcError(err.message)
+    }
+    setGcGenerating(false)
   }
 
   async function handleSaveGoatCounter() {
@@ -388,8 +381,30 @@ export default function RelatorioSEOPage() {
     setGcSaving(false)
   }
 
-  function handleExportPDF() {
-    if (!report && !gcReport) return
+  function createPdfHelpers(pdf) {
+    const setColor = (hex) => {
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      pdf.setTextColor(r, g, b)
+    }
+    const setFillColor = (hex) => {
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      pdf.setFillColor(r, g, b)
+    }
+    const setDrawColor = (hex) => {
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      pdf.setDrawColor(r, g, b)
+    }
+    return { setColor, setFillColor, setDrawColor }
+  }
+
+  function handleExportGoatCounterPDF() {
+    if (!gcReport) return
     setExporting(true)
     try {
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -397,26 +412,7 @@ export default function RelatorioSEOPage() {
       const margin = 15
       const contentW = W - margin * 2
       let y = margin
-
-      // Helper functions
-      const setColor = (hex) => {
-        const r = parseInt(hex.slice(1, 3), 16)
-        const g = parseInt(hex.slice(3, 5), 16)
-        const b = parseInt(hex.slice(5, 7), 16)
-        pdf.setTextColor(r, g, b)
-      }
-      const setFillColor = (hex) => {
-        const r = parseInt(hex.slice(1, 3), 16)
-        const g = parseInt(hex.slice(3, 5), 16)
-        const b = parseInt(hex.slice(5, 7), 16)
-        pdf.setFillColor(r, g, b)
-      }
-      const setDrawColor = (hex) => {
-        const r = parseInt(hex.slice(1, 3), 16)
-        const g = parseInt(hex.slice(3, 5), 16)
-        const b = parseInt(hex.slice(5, 7), 16)
-        pdf.setDrawColor(r, g, b)
-      }
+      const { setColor, setFillColor, setDrawColor } = createPdfHelpers(pdf)
       const checkPage = (needed) => {
         if (y + needed > 280) { pdf.addPage(); y = margin }
       }
@@ -431,26 +427,19 @@ export default function RelatorioSEOPage() {
       pdf.setFont('helvetica', 'normal')
       pdf.setFontSize(11)
       setColor('#64748b')
-      pdf.text('Relatório de Desempenho Digital', W / 2, y, { align: 'center' })
+      pdf.text('Relatório de Visitas ao Site', W / 2, y, { align: 'center' })
       y += 6
 
-      const periodLabel = report
-        ? `${formatDateBR(report.period.start)} a ${formatDateBR(report.period.end)}`
-        : gcReport
-          ? `${formatDateBR(gcReport.period.start)} a ${formatDateBR(gcReport.period.end)}`
-          : ''
       pdf.setFontSize(9)
       setColor('#94a3b8')
-      pdf.text(`Período: ${periodLabel}`, W / 2, y, { align: 'center' })
+      pdf.text(`Período: ${formatDateBR(gcReport.period.start)} a ${formatDateBR(gcReport.period.end)}`, W / 2, y, { align: 'center' })
       y += 10
 
-      // Divider
       setDrawColor('#e2e8f0')
       pdf.line(margin, y, W - margin, y)
       y += 8
 
-      // ── Seção 1: GoatCounter ────────────────────────────────────────
-      if (gcReport) {
+      {
         pdf.setFont('helvetica', 'bold')
         pdf.setFontSize(11)
         setColor('#1e293b')
@@ -612,65 +601,105 @@ export default function RelatorioSEOPage() {
         y += gcTipH + 12
       }
 
-      // ── Seção 2: Google Search Console ──────────────────────────────
-      if (report) {
-        checkPage(30)
-        setDrawColor('#e2e8f0')
-        pdf.line(margin, y, W - margin, y)
-        y += 10
+      // Footer
+      if (y + 15 > 280) { pdf.addPage(); y = margin }
+      setDrawColor('#f1f5f9')
+      pdf.line(margin, y, W - margin, y)
+      y += 5
+      pdf.setFontSize(7)
+      setColor('#94a3b8')
+      pdf.text(`Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} — Dados: GoatCounter`, W / 2, y, { align: 'center' })
 
-        pdf.setFont('helvetica', 'bold')
-        pdf.setFontSize(11)
-        setColor('#1e293b')
-        pdf.text('Como seu site apareceu no Google', margin, y)
-        y += 4
-        pdf.setFont('helvetica', 'normal')
-        pdf.setFontSize(7.5)
-        setColor('#64748b')
-        const gscIntroLines = pdf.splitTextToSize(
-          'Dados do Google Search Console: quantas vezes seu site apareceu nas pesquisas e em qual posição.',
-          contentW
-        )
-        pdf.text(gscIntroLines, margin, y)
-        y += gscIntroLines.length * 4 + 6
+      pdf.save(`relatorio-visitas-${slug}-${new Date().toISOString().slice(0, 7)}.pdf`)
+    } catch (err) {
+      setGcError('Erro ao exportar PDF: ' + err.message)
+    }
+    setExporting(false)
+  }
 
-        // KPI Cards — 2 cards lado a lado (sem Cliques e CTR)
-        const cardW = (contentW - 6) / 2
-        const cardH = 28
-        const kpis = [
-          { label: 'IMPRESSÕES', value: formatNumber(report.summary.impressions), desc: 'Quantas vezes seu site apareceu no Google', bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
-          { label: 'POSIÇÃO MÉDIA', value: formatPosition(report.summary.position), desc: 'Posição média nos resultados. Posição 1 = primeiro resultado', bg: '#faf5ff', border: '#d8b4fe', text: '#7e22ce' },
-        ]
-
-        kpis.forEach((kpi, i) => {
-          const cx = margin + i * (cardW + 6)
-          const cy = y
-
-          setFillColor(kpi.bg)
-          setDrawColor(kpi.border)
-          pdf.roundedRect(cx, cy, cardW, cardH, 2, 2, 'FD')
-
-          pdf.setFont('helvetica', 'normal')
-          pdf.setFontSize(7)
-          setColor(kpi.text)
-          pdf.text(kpi.label, cx + 4, cy + 6)
-
-          pdf.setFont('helvetica', 'bold')
-          pdf.setFontSize(16)
-          pdf.text(kpi.value, cx + 4, cy + 15)
-
-          pdf.setFont('helvetica', 'normal')
-          pdf.setFontSize(6.5)
-          setColor('#64748b')
-          const descLines = pdf.splitTextToSize(kpi.desc, cardW - 8)
-          pdf.text(descLines, cx + 4, cy + 21)
-        })
-
-        y += cardH + 10
+  function handleExportGSCPDF() {
+    if (!report) return
+    setExporting(true)
+    try {
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const W = 210
+      const margin = 15
+      const contentW = W - margin * 2
+      let y = margin
+      const { setColor, setFillColor, setDrawColor } = createPdfHelpers(pdf)
+      const checkPage = (needed) => {
+        if (y + needed > 280) { pdf.addPage(); y = margin }
       }
 
+      // Title
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(18)
+      setColor('#1e293b')
+      pdf.text(restaurant.name, W / 2, y, { align: 'center' })
+      y += 8
+
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(11)
+      setColor('#64748b')
+      pdf.text('Relatório de Desempenho no Google', W / 2, y, { align: 'center' })
+      y += 6
+
+      pdf.setFontSize(9)
+      setColor('#94a3b8')
+      pdf.text(`Período: ${formatDateBR(report.period.start)} a ${formatDateBR(report.period.end)}`, W / 2, y, { align: 'center' })
+      y += 10
+
+      setDrawColor('#e2e8f0')
+      pdf.line(margin, y, W - margin, y)
+      y += 8
+
+      // Intro
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(11)
+      setColor('#1e293b')
+      pdf.text('Como seu site apareceu no Google', margin, y)
+      y += 4
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(7.5)
+      setColor('#64748b')
+      const gscIntroLines = pdf.splitTextToSize(
+        'Dados do Google Search Console: quantas vezes seu site apareceu nas pesquisas e em qual posição.',
+        contentW
+      )
+      pdf.text(gscIntroLines, margin, y)
+      y += gscIntroLines.length * 4 + 6
+
+      // KPI Cards
+      const cardW = (contentW - 6) / 2
+      const cardH = 28
+      const kpis = [
+        { label: 'IMPRESSÕES', value: formatNumber(report.summary.impressions), desc: 'Quantas vezes seu site apareceu no Google', bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
+        { label: 'POSIÇÃO MÉDIA', value: formatPosition(report.summary.position), desc: 'Posição média nos resultados. Posição 1 = primeiro resultado', bg: '#faf5ff', border: '#d8b4fe', text: '#7e22ce' },
+      ]
+
+      kpis.forEach((kpi, i) => {
+        const cx = margin + i * (cardW + 6)
+        const cy = y
+        setFillColor(kpi.bg)
+        setDrawColor(kpi.border)
+        pdf.roundedRect(cx, cy, cardW, cardH, 2, 2, 'FD')
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(7)
+        setColor(kpi.text)
+        pdf.text(kpi.label, cx + 4, cy + 6)
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(16)
+        pdf.text(kpi.value, cx + 4, cy + 15)
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(6.5)
+        setColor('#64748b')
+        const descLines = pdf.splitTextToSize(kpi.desc, cardW - 8)
+        pdf.text(descLines, cx + 4, cy + 21)
+      })
+      y += cardH + 10
+
       // Top Queries table
-      if (report?.topQueries?.length > 0) {
+      if (report.topQueries.length > 0) {
         checkPage(40)
         pdf.setFont('helvetica', 'bold')
         pdf.setFontSize(10)
@@ -717,7 +746,7 @@ export default function RelatorioSEOPage() {
       }
 
       // Top Pages table (GSC)
-      if (report?.topPages?.length > 0) {
+      if (report.topPages.length > 0) {
         checkPage(40)
         pdf.setFont('helvetica', 'bold')
         pdf.setFontSize(10)
@@ -768,26 +797,24 @@ export default function RelatorioSEOPage() {
       }
 
       // GSC summary tip
-      if (report) {
-        checkPage(20)
-        setFillColor('#fffbeb')
-        setDrawColor('#fde68a')
-        const tipText = report.summary.impressions > 0
-          ? `No período selecionado, seu site apareceu ${formatNumber(report.summary.impressions)} vezes nas pesquisas do Google. Posição média: ${formatPosition(report.summary.position)} (quanto menor, melhor).`
-          : 'Seu site ainda está começando a aparecer no Google. É normal levar algumas semanas para os resultados crescerem.'
-        const tipLines = pdf.splitTextToSize(tipText, contentW - 10)
-        const tipH = tipLines.length * 4 + 12
-        pdf.roundedRect(margin, y, contentW, tipH, 2, 2, 'FD')
-        pdf.setFont('helvetica', 'bold')
-        pdf.setFontSize(8)
-        setColor('#92400e')
-        pdf.text('O que significa posição média?', margin + 5, y + 6)
-        pdf.setFont('helvetica', 'normal')
-        pdf.setFontSize(7.5)
-        setColor('#78350f')
-        pdf.text(tipLines, margin + 5, y + 12)
-        y += tipH + 12
-      }
+      checkPage(20)
+      setFillColor('#fffbeb')
+      setDrawColor('#fde68a')
+      const tipText = report.summary.impressions > 0
+        ? `No período selecionado, seu site apareceu ${formatNumber(report.summary.impressions)} vezes nas pesquisas do Google. Posição média: ${formatPosition(report.summary.position)} (quanto menor, melhor).`
+        : 'Seu site ainda está começando a aparecer no Google. É normal levar algumas semanas para os resultados crescerem.'
+      const tipLines = pdf.splitTextToSize(tipText, contentW - 10)
+      const tipH = tipLines.length * 4 + 12
+      pdf.roundedRect(margin, y, contentW, tipH, 2, 2, 'FD')
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(8)
+      setColor('#92400e')
+      pdf.text('O que significa posição média?', margin + 5, y + 6)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(7.5)
+      setColor('#78350f')
+      pdf.text(tipLines, margin + 5, y + 12)
+      y += tipH + 12
 
       // Footer
       checkPage(15)
@@ -796,11 +823,9 @@ export default function RelatorioSEOPage() {
       y += 5
       pdf.setFontSize(7)
       setColor('#94a3b8')
-      const sources = [report && 'Google Search Console', gcReport && 'GoatCounter'].filter(Boolean).join(' + ')
-      const footerText = `Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} — Dados: ${sources}`
-      pdf.text(footerText, W / 2, y, { align: 'center' })
+      pdf.text(`Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} — Dados: Google Search Console`, W / 2, y, { align: 'center' })
 
-      pdf.save(`relatorio-seo-${slug}-${new Date().toISOString().slice(0, 7)}.pdf`)
+      pdf.save(`relatorio-google-${slug}-${new Date().toISOString().slice(0, 7)}.pdf`)
     } catch (err) {
       setError('Erro ao exportar PDF: ' + err.message)
     }
@@ -831,17 +856,6 @@ export default function RelatorioSEOPage() {
           <div>
             <h1 className="text-2xl font-bold text-slate-800">Relatório SEO</h1>
             <p className="text-sm text-slate-500 mt-0.5">{restaurant.name} — {contract?.siteUrl || 'Site URL não configurado'}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {(report || gcReport) && (
-              <button
-                onClick={handleExportPDF}
-                disabled={exporting}
-                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition disabled:opacity-50"
-              >
-                {exporting ? 'Exportando…' : '📄 Exportar PDF'}
-              </button>
-            )}
           </div>
         </div>
 
@@ -883,20 +897,6 @@ export default function RelatorioSEOPage() {
                 Conectar Search Console
               </button>
             )}
-            <button
-              onClick={handleGenerateAll}
-              disabled={generating || gcGenerating || (!contract?.siteUrl && !contract?.goatcounterUrl)}
-              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition disabled:opacity-50"
-            >
-              {generating || gcGenerating ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Gerando…
-                </>
-              ) : (
-                <>📊 Gerar Relatório</>
-              )}
-            </button>
           </div>
         </div>
       </div>
@@ -904,18 +904,6 @@ export default function RelatorioSEOPage() {
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-6 text-sm">
           {error}
-        </div>
-      )}
-
-      {!report && !gcReport && !generating && !gcGenerating && !error && !gcError && (
-        <div className="bg-white rounded-2xl border border-slate-200 py-24 text-center">
-          <p className="text-4xl mb-4">📊</p>
-          <p className="text-slate-500 text-sm">
-            {needsAuth
-              ? 'Conecte sua conta Google para acessar o Search Console.'
-              : 'Selecione o período e clique em "Gerar Relatório".'
-            }
-          </p>
         </div>
       )}
 
@@ -937,6 +925,29 @@ export default function RelatorioSEOPage() {
             >
               ⚙️ {contract?.goatcounterUrl ? 'Editar' : 'Configurar'}
             </button>
+            <button
+              onClick={handleGenerateGoatCounter}
+              disabled={gcGenerating || !contract?.goatcounterUrl || !contract?.goatcounterToken}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm px-4 py-2 rounded-xl transition disabled:opacity-50"
+            >
+              {gcGenerating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Gerando…
+                </>
+              ) : (
+                <>📊 Gerar</>
+              )}
+            </button>
+            {gcReport && (
+              <button
+                onClick={handleExportGoatCounterPDF}
+                disabled={exporting}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-4 py-2 rounded-xl transition disabled:opacity-50"
+              >
+                {exporting ? 'Exportando…' : '📄 PDF'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -1095,7 +1106,57 @@ export default function RelatorioSEOPage() {
         )}
       </div>
 
-      {/* Report content — Google Search Console */}
+      {/* === Seção Google Search Console === */}
+      <div className="mb-10">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800">🔎 Desempenho no Google (Search Console)</h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {contract?.siteUrl
+                ? <>Site: <span className="font-mono text-xs">{contract.siteUrl}</span></>
+                : 'Configure o Site URL no contrato para buscar dados do Search Console.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleGenerateGSC}
+              disabled={generating || !contract?.siteUrl || needsAuth}
+              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm px-4 py-2 rounded-xl transition disabled:opacity-50"
+            >
+              {generating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Gerando…
+                </>
+              ) : (
+                <>📊 Gerar</>
+              )}
+            </button>
+            {report && (
+              <button
+                onClick={handleExportGSCPDF}
+                disabled={exporting}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-4 py-2 rounded-xl transition disabled:opacity-50"
+              >
+                {exporting ? 'Exportando…' : '📄 PDF'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {!report && !generating && !error && (
+          <div className="bg-white rounded-2xl border border-slate-200 py-16 text-center">
+            <p className="text-4xl mb-3">🔎</p>
+            <p className="text-slate-500 text-sm">
+              {needsAuth
+                ? 'Conecte sua conta Google para acessar o Search Console.'
+                : contract?.siteUrl
+                  ? 'Clique em "Gerar" para buscar dados do Search Console.'
+                  : 'Configure o Site URL no contrato para começar.'}
+            </p>
+          </div>
+        )}
+
       {report && (
         <div ref={reportRef} style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '1rem', padding: '2rem', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
           {/* Report Header */}
@@ -1222,6 +1283,7 @@ export default function RelatorioSEOPage() {
           </div>
         </div>
       )}
+      </div>
 
     </div>
   )
