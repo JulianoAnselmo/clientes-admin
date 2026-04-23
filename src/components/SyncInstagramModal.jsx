@@ -10,26 +10,33 @@ import { useState } from 'react'
  * pro Firebase Storage e grava o array no Firestore.
  */
 
-const RELAY_URL = 'https://marietabistro.com.br/sync-instagram.html'
 const SYNC_SECRET = import.meta.env.VITE_MENUDINO_SYNC_SECRET || ''
 const BOOKMARKLET_CONFIGURED = !!SYNC_SECRET
+
+// Mapping slug → { relayUrl, handle, instagramUrl }. Adicione novos clientes aqui.
+const RESTAURANT_CONFIG = {
+  'marieta-bistro':   { relayUrl: 'https://marietabistro.com.br/sync-instagram.html',   handle: 'marieta_bistro',    instagramUrl: 'https://www.instagram.com/marieta_bistro/' },
+  'olimpus-academia': { relayUrl: 'https://olimpustaquaritinga.com.br/sync-instagram.html', handle: 'academiaolimpustaq', instagramUrl: 'https://www.instagram.com/academiaolimpustaq/' }
+}
+
+function resolveConfig(restaurantSlug, instagramUrl) {
+  const cfg = RESTAURANT_CONFIG[restaurantSlug] || RESTAURANT_CONFIG['marieta-bistro']
+  return { ...cfg, instagramUrl: instagramUrl && instagramUrl.trim() ? instagramUrl : cfg.instagramUrl }
+}
 
 // Código do bookmarklet (single-line). Contorna o CSP do Instagram (que bloqueia
 // fetch pro Cloudflare Worker) navegando pra uma relay page no nosso domínio
 // — a relay faz o POST e mostra o resultado sem restrições.
-// Procura posts no grid do perfil via <a href="/p/...">/<a href="/reel/...">.
-function buildBookmarkletCode(relayUrl, secret) {
-  return `(()=>{try{if(!location.hostname.includes('instagram.com')){alert('Abra instagram.com/marieta_bistro primeiro (esta em: '+location.hostname+')');return;}var links=document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]');if(!links.length){alert('Nenhum post encontrado. Role um pouco ou abra o perfil @marieta_bistro.');return;}var posts=[];var seen=new Set();for(var i=0;i<links.length&&posts.length<9;i++){var a=links[i];var img=a.querySelector('img');if(!img||!img.src)continue;if(seen.has(a.href))continue;seen.add(a.href);posts.push({imageUrl:img.src,postUrl:a.href,alt:img.alt||''});}if(!posts.length){alert('Nenhum post com imagem encontrado no grid.');return;}if(!confirm('Enviar '+posts.length+' posts para o site?'))return;var payload={kind:'instagram',secret:'${secret}',posts:posts};location.href='${relayUrl}#'+encodeURIComponent(JSON.stringify(payload));}catch(e){alert('Erro: '+(e&&e.message||e));}})();void 0;`
+function buildBookmarkletCode(relayUrl, secret, handle) {
+  return `(()=>{try{if(!location.hostname.includes('instagram.com')){alert('Abra instagram.com/${handle} primeiro (esta em: '+location.hostname+')');return;}var links=document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]');if(!links.length){alert('Nenhum post encontrado. Role um pouco ou abra o perfil @${handle}.');return;}var posts=[];var seen=new Set();for(var i=0;i<links.length&&posts.length<9;i++){var a=links[i];var img=a.querySelector('img');if(!img||!img.src)continue;if(seen.has(a.href))continue;seen.add(a.href);posts.push({imageUrl:img.src,postUrl:a.href,alt:img.alt||''});}if(!posts.length){alert('Nenhum post com imagem encontrado no grid.');return;}if(!confirm('Enviar '+posts.length+' posts para o site?'))return;var payload={kind:'instagram',secret:'${secret}',posts:posts};location.href='${relayUrl}#'+encodeURIComponent(JSON.stringify(payload));}catch(e){alert('Erro: '+(e&&e.message||e));}})();void 0;`
 }
 
-function buildBookmarkletAnchorHTML() {
+function buildBookmarkletAnchorHTML(cfg) {
   if (!BOOKMARKLET_CONFIGURED) return null
-  const code = buildBookmarkletCode(RELAY_URL, SYNC_SECRET)
+  const code = buildBookmarkletCode(cfg.relayUrl, SYNC_SECRET, cfg.handle)
   const href = `javascript:${encodeURIComponent(code)}`
   return `<a href="${href}" draggable="true" title="Arraste pra barra de favoritos. Depois, estando no Instagram, clique pra sincronizar." style="display:inline-block;padding:12px 20px;background:linear-gradient(135deg,#d946ef,#a855f7);color:white;border-radius:8px;font-weight:700;text-decoration:none;cursor:move;box-shadow:0 2px 4px rgba(0,0,0,0.1);user-select:none">📸 Sincronizar Instagram</a>`
 }
-
-const BOOKMARKLET_ANCHOR_HTML = buildBookmarkletAnchorHTML()
 
 const TUTORIAL_CSS = `
   @keyframes tutorial-drag {
@@ -58,8 +65,10 @@ const TUTORIAL_CSS = `
   .ig-tut-newitem  { animation: tutorial-newbookmark 4s infinite ease-in-out; }
 `
 
-export default function SyncInstagramModal({ isOpen, onClose, instagramUrl, onSyncComplete }) {
+export default function SyncInstagramModal({ isOpen, onClose, instagramUrl, restaurantSlug, onSyncComplete }) {
   const [showTutorial, setShowTutorial] = useState(false)
+  const cfg = resolveConfig(restaurantSlug, instagramUrl)
+  const BOOKMARKLET_ANCHOR_HTML = buildBookmarkletAnchorHTML(cfg)
 
   const handleClose = () => {
     if (onSyncComplete) onSyncComplete()
@@ -67,9 +76,7 @@ export default function SyncInstagramModal({ isOpen, onClose, instagramUrl, onSy
   }
 
   const handleAbrirInstagram = () => {
-    const url = instagramUrl && instagramUrl.trim()
-      ? (instagramUrl.startsWith('http') ? instagramUrl : 'https://' + instagramUrl)
-      : 'https://www.instagram.com/marieta_bistro/'
+    const url = cfg.instagramUrl.startsWith('http') ? cfg.instagramUrl : 'https://' + cfg.instagramUrl
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
@@ -110,7 +117,7 @@ export default function SyncInstagramModal({ isOpen, onClose, instagramUrl, onSy
               </p>
             </div>
           ) : showTutorial ? (
-            <TutorialView onBack={() => setShowTutorial(false)} />
+            <TutorialView onBack={() => setShowTutorial(false)} handle={cfg.handle} />
           ) : (
             <>
               <div className="bg-gradient-to-br from-fuchsia-50 to-purple-50 border-2 border-fuchsia-300 rounded-xl p-5">
@@ -130,7 +137,7 @@ export default function SyncInstagramModal({ isOpen, onClose, instagramUrl, onSy
 
                 <ol className="text-sm text-slate-700 space-y-1.5 mb-4 list-decimal pl-5">
                   <li><b>Arraste</b> o botão rosa abaixo pra barra de favoritos do navegador (só precisa fazer isso uma vez).</li>
-                  <li>Abra o Instagram no perfil <b>@marieta_bistro</b> em outra aba (já logado).</li>
+                  <li>Abra o Instagram no perfil <b>@{cfg.handle}</b> em outra aba (já logado).</li>
                   <li><b>Clique no favorito</b> — você será redirecionado pra tela de sincronização com o resultado.</li>
                 </ol>
 
@@ -192,7 +199,7 @@ export default function SyncInstagramModal({ isOpen, onClose, instagramUrl, onSy
 // TutorialView — animação CSS demonstrando o drag do botão pra barra de favs.
 // ===========================================================================
 
-function TutorialView({ onBack }) {
+function TutorialView({ onBack, handle }) {
   return (
     <div>
       <style>{TUTORIAL_CSS}</style>
@@ -292,7 +299,7 @@ function TutorialView({ onBack }) {
         </div>
         <div className="flex gap-3">
           <div className="flex-shrink-0 w-6 h-6 rounded-full bg-fuchsia-600 text-white font-bold flex items-center justify-center text-xs">4</div>
-          <p>No futuro, estando na aba do Instagram (<b>@marieta_bistro</b>), <b>clique no favorito</b> e confirme. A aba é redirecionada pra tela de resultado da sincronização.</p>
+          <p>No futuro, estando na aba do Instagram (<b>@{handle}</b>), <b>clique no favorito</b> e confirme. A aba é redirecionada pra tela de resultado da sincronização.</p>
         </div>
       </div>
 

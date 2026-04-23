@@ -291,6 +291,7 @@ export default function BusinessInfoEditor() {
         isOpen={igModalOpen}
         onClose={() => setIgModalOpen(false)}
         instagramUrl={info.instagram}
+        restaurantSlug={slug}
         onSyncComplete={loadInstagram}
       />
     </div>

@@ -27,15 +27,19 @@ import {
   mergeBusinessInfo
 } from './menudino-sync-lib.js';
 
-const ALLOWED_ORIGINS = [
-  'https://marietabistro.menudino.com',
-  'https://marietabistro.com.br'
-];
 const PROJECT_ID = 'cardapio-admin-prod';
 // Bucket GCS do projeto. Confirmado via Firebase Console:
 // gs://cardapio-admin-prod.firebasestorage.app (naming novo, pos-out-2024).
 const STORAGE_BUCKET = 'cardapio-admin-prod.firebasestorage.app';
-const RESTAURANT_SLUG = 'marieta-bistro';
+
+// Multi-tenant: Origin → { slug, instagramUrl, handle }. Adicione novos clientes aqui.
+const TENANTS = {
+  'https://marietabistro.menudino.com': { slug: 'marieta-bistro', instagramUrl: 'https://www.instagram.com/marieta_bistro/', handle: 'marieta_bistro' },
+  'https://marietabistro.com.br':       { slug: 'marieta-bistro', instagramUrl: 'https://www.instagram.com/marieta_bistro/', handle: 'marieta_bistro' },
+  'https://olimpustaquaritinga.com.br': { slug: 'olimpus-academia', instagramUrl: 'https://www.instagram.com/academiaolimpustaq/', handle: 'academiaolimpustaq' },
+  'https://www.olimpustaquaritinga.com.br': { slug: 'olimpus-academia', instagramUrl: 'https://www.instagram.com/academiaolimpustaq/', handle: 'academiaolimpustaq' }
+};
+const ALLOWED_ORIGINS = Object.keys(TENANTS);
 
 export default {
   async fetch(request, env) {
@@ -74,7 +78,9 @@ export default {
 
       // Rota Instagram (bookmarklet rodando em instagram.com)
       if (body.kind === 'instagram') {
-        return cors(await syncInstagram(body, env), origin);
+        const tenant = TENANTS[origin];
+        if (!tenant) return cors(jsonResponse({ ok: false, error: 'tenant desconhecido' }, 400), origin);
+        return cors(await syncInstagram(body, env, tenant), origin);
       }
 
       // Sanity check do payload
@@ -82,13 +88,16 @@ export default {
         return cors(jsonResponse({ ok: false, error: 'payload incompleto' }, 400), origin);
       }
 
+      const menudinoTenant = TENANTS[origin];
+      if (!menudinoTenant) return cors(jsonResponse({ ok: false, error: 'tenant desconhecido' }, 400), origin);
+
       // 1. Access token Google
       const accessToken = await getGoogleAccessToken(env.SERVICE_ACCOUNT_JSON);
 
       // 2. L\u00ea estado atual do Firestore
       const [cardapioAtual, businessInfoAtual] = await Promise.all([
-        firestoreGetContent('cardapio', accessToken),
-        firestoreGetContent('businessInfo', accessToken)
+        firestoreGetContent('cardapio', accessToken, menudinoTenant.slug),
+        firestoreGetContent('businessInfo', accessToken, menudinoTenant.slug)
       ]);
 
       // 3. Converte + merge
@@ -100,8 +109,8 @@ export default {
       // 4. Grava
       const updatedAt = new Date().toISOString();
       await Promise.all([
-        firestorePatchDoc('cardapio', { content: merged.cardapio, updatedAt }, accessToken),
-        firestorePatchDoc('businessInfo', { content: businessInfoMerged, updatedAt }, accessToken)
+        firestorePatchDoc('cardapio', { content: merged.cardapio, updatedAt }, accessToken, menudinoTenant.slug),
+        firestorePatchDoc('businessInfo', { content: businessInfoMerged, updatedAt }, accessToken, menudinoTenant.slug)
       ]);
 
       return cors(jsonResponse({ ok: true, stats: merged.stats, updatedAt }), origin);
@@ -223,15 +232,15 @@ function base64ToArrayBuffer(b64) {
 
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
-function docPath(docId) {
-  return `${FIRESTORE_BASE}/restaurants/${RESTAURANT_SLUG}/data/${docId}`;
+function docPath(docId, slug) {
+  return `${FIRESTORE_BASE}/restaurants/${slug}/data/${docId}`;
 }
 
 /**
  * GET de um documento, retornando apenas o `content` decodificado (ou null se 404).
  */
-async function firestoreGetContent(docId, accessToken) {
-  const r = await fetch(docPath(docId), {
+async function firestoreGetContent(docId, accessToken, slug) {
+  const r = await fetch(docPath(docId, slug), {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
   if (r.status === 404) return null;
@@ -249,9 +258,9 @@ async function firestoreGetContent(docId, accessToken) {
  * PATCH (overwrite) completo do documento com { content, updatedAt }.
  * `updateMask` omitido \u2192 substitui o documento inteiro.
  */
-async function firestorePatchDoc(docId, payload, accessToken) {
+async function firestorePatchDoc(docId, payload, accessToken, slug) {
   const body = { fields: encodeFields(payload) };
-  const r = await fetch(docPath(docId), {
+  const r = await fetch(docPath(docId, slug), {
     method: 'PATCH',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -312,7 +321,7 @@ function decodeValue(val) {
 // sobe pro Firebase Storage e grava no Firestore.
 // ---------------------------------------------------------------------------
 
-async function syncInstagram(body, env) {
+async function syncInstagram(body, env, tenant) {
   if (!Array.isArray(body.posts) || !body.posts.length) {
     return jsonResponse({ ok: false, error: 'posts vazios' }, 400);
   }
@@ -324,21 +333,21 @@ async function syncInstagram(body, env) {
     'https://www.googleapis.com/auth/devstorage.read_write'
   ]);
 
-  const uploads = await Promise.all(posts.map((post, i) => uploadInstagramPost(post, i, accessToken)));
+  const uploads = await Promise.all(posts.map((post, i) => uploadInstagramPost(post, i, accessToken, tenant.slug)));
 
   const content = uploads.map((u, i) => ({
     image: u.publicUrl,
-    postUrl: posts[i].postUrl || 'https://www.instagram.com/marieta_bistro/',
-    alt: posts[i].alt || 'Post do @marieta_bistro'
+    postUrl: posts[i].postUrl || tenant.instagramUrl,
+    alt: posts[i].alt || ('Post do @' + tenant.handle)
   }));
 
   const updatedAt = new Date().toISOString();
-  await firestorePatchDoc('instagram', { content, updatedAt }, accessToken);
+  await firestorePatchDoc('instagram', { content, updatedAt }, accessToken, tenant.slug);
 
   return jsonResponse({ ok: true, stats: { count: content.length }, updatedAt });
 }
 
-async function uploadInstagramPost(post, index, accessToken) {
+async function uploadInstagramPost(post, index, accessToken, slug) {
   if (!post || !post.imageUrl) throw new Error(`post ${index + 1} sem imageUrl`);
 
   // 1. Baixa a imagem do CDN do Instagram (UA + Referer evitam 403)
@@ -360,7 +369,7 @@ async function uploadInstagramPost(post, index, accessToken) {
   // eh lido pela API Firebase Storage v0 para autorizar download publico
   // via URL com ?token=<uuid>.
   const token = crypto.randomUUID();
-  const objectPath = `instagram/${RESTAURANT_SLUG}/post_${index + 1}.jpg`;
+  const objectPath = `instagram/${slug}/post_${index + 1}.jpg`;
   const encodedPath = encodeURIComponent(objectPath);
 
   const body = buildMultipartBody(objectPath, contentType, token, new Uint8Array(bytes));
