@@ -387,6 +387,7 @@ document.getElementById('btn-whatsapp').href = waUrl;
 | `pizza-kid`                 | Pizza Kid Taquaritinga   | https://www.pizzakidtaquaritinga.com.br      | 2026-04-17   | Cardápio tem campo `divisao` por aba (pizzas meio-a-meio); cache localStorage SWR |
 | `imperium-moda-social`      | Imperium Moda Social     | —                                            | 2026-04-14   | Não é restaurante; usa coleção `products` em vez de `cardapio`                    |
 | `casa-de-carnes-mais-sabor` | Casa de Carnes M. Sabor  | (menudino)                                   | 2026-04-14   | Sem site próprio; redirect para menudino                                          |
+| `academia-olimpus`          | Academia Olimpus         | —                                            | 2026-04-20   | Academia (não é restaurante); consome apenas `businessInfo`. Site em `C:/dev/clientes/olimpus` |
 
 Ao integrar um novo cliente, adicione uma linha nesta tabela com o que for não-trivial para futuros mantenedores.
 

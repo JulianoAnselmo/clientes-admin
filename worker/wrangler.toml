@@ -1,4 +1,4 @@
-name = "marieta-sync"
+name = "clientes-sync"
 main = "src/index.js"
 compatibility_date = "2026-04-01"
 

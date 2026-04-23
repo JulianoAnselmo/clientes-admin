@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker: marieta-sync
+ * Cloudflare Worker: clientes-sync (multi-tenant)
  *
  * Recebe payload do bookmarklet (rodando na aba do Menudino) e grava no Firestore
  * usando service account. O Worker existe porque Firebase Auth barra CORS a partir
@@ -36,8 +36,8 @@ const STORAGE_BUCKET = 'cardapio-admin-prod.firebasestorage.app';
 const TENANTS = {
   'https://marietabistro.menudino.com': { slug: 'marieta-bistro', instagramUrl: 'https://www.instagram.com/marieta_bistro/', handle: 'marieta_bistro' },
   'https://marietabistro.com.br':       { slug: 'marieta-bistro', instagramUrl: 'https://www.instagram.com/marieta_bistro/', handle: 'marieta_bistro' },
-  'https://olimpustaquaritinga.com.br': { slug: 'olimpus-academia', instagramUrl: 'https://www.instagram.com/academiaolimpustaq/', handle: 'academiaolimpustaq' },
-  'https://www.olimpustaquaritinga.com.br': { slug: 'olimpus-academia', instagramUrl: 'https://www.instagram.com/academiaolimpustaq/', handle: 'academiaolimpustaq' }
+  'https://olimpustaquaritinga.com.br': { slug: 'academia-olimpus', instagramUrl: 'https://www.instagram.com/academiaolimpustaq/', handle: 'academiaolimpustaq' },
+  'https://www.olimpustaquaritinga.com.br': { slug: 'academia-olimpus', instagramUrl: 'https://www.instagram.com/academiaolimpustaq/', handle: 'academiaolimpustaq' }
 };
 const ALLOWED_ORIGINS = Object.keys(TENANTS);
 
