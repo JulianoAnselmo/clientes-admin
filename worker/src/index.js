@@ -37,7 +37,11 @@ const TENANTS = {
   'https://marietabistro.menudino.com': { slug: 'marieta-bistro', instagramUrl: 'https://www.instagram.com/marieta_bistro/', handle: 'marieta_bistro' },
   'https://marietabistro.com.br':       { slug: 'marieta-bistro', instagramUrl: 'https://www.instagram.com/marieta_bistro/', handle: 'marieta_bistro' },
   'https://academiaolimpus.com.br': { slug: 'academia-olimpus', instagramUrl: 'https://www.instagram.com/academiaolimpustaq/', handle: 'academiaolimpustaq' },
-  'https://www.academiaolimpus.com.br': { slug: 'academia-olimpus', instagramUrl: 'https://www.instagram.com/academiaolimpustaq/', handle: 'academiaolimpustaq' }
+  'https://www.academiaolimpus.com.br': { slug: 'academia-olimpus', instagramUrl: 'https://www.instagram.com/academiaolimpustaq/', handle: 'academiaolimpustaq' },
+  'https://pizzakidtaquaritinga.com.br':     { slug: 'pizza-kid', instagramUrl: 'https://www.instagram.com/pizzakidtaq/', handle: 'pizzakidtaq' },
+  'https://www.pizzakidtaquaritinga.com.br': { slug: 'pizza-kid', instagramUrl: 'https://www.instagram.com/pizzakidtaq/', handle: 'pizzakidtaq' },
+  'https://casadecarnesmaissabor.com.br':     { slug: 'casa-de-carnes-mais-sabor', instagramUrl: 'https://www.instagram.com/casadecarnes.maissabor/', handle: 'casadecarnes.maissabor' },
+  'https://www.casadecarnesmaissabor.com.br': { slug: 'casa-de-carnes-mais-sabor', instagramUrl: 'https://www.instagram.com/casadecarnes.maissabor/', handle: 'casadecarnes.maissabor' }
 };
 const ALLOWED_ORIGINS = Object.keys(TENANTS);
 
