@@ -1,6 +1,6 @@
 /**
  * menudino-sync.js — lógica de sincronização do cardápio Menudino → Firestore,
- * adaptada para rodar dentro do browser do cardapio-admin.
+ * adaptada para rodar dentro do browser do cliente-admin.
  *
  * Por que no browser?
  *   - O Cloudflare do Menudino bloqueia qualquer IP de datacenter (GitHub
@@ -111,7 +111,7 @@ export async function fetchItems(token, merchantId, categoryId) {
 }
 
 // ---------------------------------------------------------------------------
-// Conversão Menudino → formato cardapio-admin
+// Conversão Menudino → formato cliente-admin
 // ---------------------------------------------------------------------------
 
 function prefixHttps(url) {

@@ -1,5 +1,5 @@
 /**
- * Fun\u00e7\u00f5es puras copiadas de cardapio-admin/src/lib/menudino-sync.js
+ * Fun\u00e7\u00f5es puras copiadas de cliente-admin/src/lib/menudino-sync.js
  * para rodar no Cloudflare Worker. S\u00e3o 100% isom\u00f3rficas (s\u00f3 JS, sem DOM/fetch).
  *
  * Qualquer mudan\u00e7a na l\u00f3gica de merge deve ser replicada aqui E no admin.
@@ -18,7 +18,7 @@ const PALAVRAS_BEBIDAS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Convers\u00e3o Menudino \u2192 formato cardapio-admin
+// Convers\u00e3o Menudino \u2192 formato cliente-admin
 // ---------------------------------------------------------------------------
 
 function prefixHttps(url) {

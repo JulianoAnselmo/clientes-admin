@@ -6,7 +6,7 @@ Este documento descreve a arquitetura completa da plataforma **Cardápio Admin**
 
 ## 1. Visão Geral da Plataforma
 
-**Cardápio Admin** (`C:/dev/cardapio-admin`) é um painel React/Vite que gerencia dados de múltiplos clientes no Firebase. Sites clientes (ex: `C:/dev/clientes/marieta`) consomem esses dados via API REST pública do Firestore.
+**Cardápio Admin** (`C:/dev/cliente-admin`) é um painel React/Vite que gerencia dados de múltiplos clientes no Firebase. Sites clientes (ex: `C:/dev/clientes/marieta`) consomem esses dados via API REST pública do Firestore.
 
 ### Stack
 - Admin: React 19 + Vite 8 + Tailwind CSS 4 + Firebase SDK
