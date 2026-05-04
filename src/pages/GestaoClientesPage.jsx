@@ -41,7 +41,7 @@ function metricsReminderDue(contract) {
   const reminderDay = payDay === 1
     ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
     : payDay - 1
-  if (day !== reminderDay) return false
+  if (day < reminderDay) return false
   return contract.lastMetricsSent !== currentMonth()
 }
 
