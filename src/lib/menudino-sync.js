@@ -183,6 +183,8 @@ export async function syncMenudinoCardapio({ pastedData, cookieString, firestore
   log('Escrevendo no Firestore...');
   await setDoc(cardapioRef, { content: merged.cardapio, updatedAt: new Date().toISOString() });
   await setDoc(bizRef, { content: businessInfoMerged, updatedAt: new Date().toISOString() });
+  const rootRef = doc(firestore, 'restaurants', restaurantSlug);
+  await setDoc(rootRef, { phone: businessInfoMerged.phone || businessInfoMerged.whatsapp || '' }, { merge: true });
 
   const estruturaFinal = (merged.cardapio || []).map(tab => {
     const nCats = (tab.categorias || []).length;

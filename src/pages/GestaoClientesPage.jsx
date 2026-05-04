@@ -686,7 +686,7 @@ export default function GestaoClientesPage() {
 
                     {hasContract && (
                       <a
-                        href={whatsappLink('', r.name, c.contractValue, c.paymentDay)}
+                        href={whatsappLink(r.phone, r.name, c.contractValue, c.paymentDay)}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Lembrete via WhatsApp"

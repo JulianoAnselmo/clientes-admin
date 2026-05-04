@@ -128,6 +128,7 @@ export default function BusinessInfoEditor() {
         content: info,
         updatedAt: new Date().toISOString()
       })
+      await setDoc(doc(db, 'restaurants', slug), { phone: info.phone || info.whatsapp || '' }, { merge: true })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (err) {
