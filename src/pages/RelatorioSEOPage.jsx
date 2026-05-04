@@ -255,7 +255,10 @@ export default function RelatorioSEOPage() {
         setNeedsAuth(false)
         setError('')
       } catch (err) {
-        setError('Erro na autenticação: ' + err.message)
+        const msg = err.message === 'Failed to fetch'
+          ? 'Falha de rede ao contatar Worker (verifique VITE_OAUTH_WORKER_URL e ADMIN_ORIGINS do Worker).'
+          : err.message
+        setError('Erro na autenticação: ' + msg)
       }
     }
 
@@ -406,208 +409,233 @@ export default function RelatorioSEOPage() {
     if (!gcReport) return
     setExporting(true)
     try {
+      const A = '#059669', AL = '#ecfdf5', A2 = '#0891b2'
+      const W = 210, H = 297, mg = 15, cW = W - mg * 2
+
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const W = 210
-      const margin = 15
-      const contentW = W - margin * 2
-      let y = margin
       const { setColor, setFillColor, setDrawColor } = createPdfHelpers(pdf)
-      const checkPage = (needed) => {
-        if (y + needed > 280) { pdf.addPage(); y = margin }
+      let y = 0
+
+      const checkPage = (need) => {
+        if (y + need > H - 14) { pdf.addPage(); y = mg }
       }
 
-      // Title
+      // ── HEADER BANNER ──────────────────────────────────
+      setFillColor(A)
+      pdf.rect(0, 0, W, 44, 'F')
+      setFillColor('#10b981')
+      pdf.roundedRect(W - 52, -4, 56, 52, 8, 8, 'F')
+
       pdf.setFont('helvetica', 'bold')
-      pdf.setFontSize(18)
-      setColor('#1e293b')
-      pdf.text(restaurant.name, W / 2, y, { align: 'center' })
-      y += 8
+      pdf.setFontSize(20)
+      pdf.setTextColor(255, 255, 255)
+      pdf.text(restaurant.name, mg, 17)
 
       pdf.setFont('helvetica', 'normal')
-      pdf.setFontSize(11)
-      setColor('#64748b')
-      pdf.text('Relatório de Visitas ao Site', W / 2, y, { align: 'center' })
-      y += 6
+      pdf.setFontSize(10.5)
+      pdf.setTextColor(167, 243, 208)
+      pdf.text('Relatório de Visitas ao Site', mg, 27)
 
-      pdf.setFontSize(9)
-      setColor('#94a3b8')
-      pdf.text(`Período: ${formatDateBR(gcReport.period.start)} a ${formatDateBR(gcReport.period.end)}`, W / 2, y, { align: 'center' })
-      y += 10
+      pdf.setFontSize(8.5)
+      pdf.setTextColor(110, 231, 183)
+      pdf.text(`${formatDateBR(gcReport.period.start)}  —  ${formatDateBR(gcReport.period.end)}`, mg, 36)
 
-      setDrawColor('#e2e8f0')
-      pdf.line(margin, y, W - margin, y)
-      y += 8
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(7)
+      pdf.setTextColor(255, 255, 255)
+      pdf.text('ANALYTICS COOKIELESS', W - mg, 19, { align: 'right' })
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(6.5)
+      pdf.setTextColor(167, 243, 208)
+      pdf.text('Relatório Mensal · SartoriaLab', W - mg, 26, { align: 'right' })
 
-      {
+      y = 55
+
+      // ── KPI CARDS 2×2 ──────────────────────────────────
+      const cardW = (cW - 6) / 2, cardH = 30
+      ;[
+        { label: 'PAGEVIEWS', value: formatNumber(gcReport.summary.pageviews), desc: 'Total de páginas visualizadas', accent: A },
+        { label: 'VISITANTES ÚNICOS', value: formatNumber(gcReport.summary.unique), desc: 'Pessoas distintas que visitaram', accent: A2 },
+        { label: 'PÁGINA MAIS VISTA', value: gcReport.summary.topPath === '/' ? 'Início' : (gcReport.summary.topPath.length > 18 ? gcReport.summary.topPath.slice(0, 18) + '…' : gcReport.summary.topPath), desc: 'Caminho com mais acessos', accent: '#d97706' },
+        { label: 'PRINCIPAL ORIGEM', value: gcReport.summary.topRef.length > 20 ? gcReport.summary.topRef.slice(0, 20) + '…' : gcReport.summary.topRef, desc: 'Fonte que mais trouxe visitas', accent: '#7c3aed' },
+      ].forEach((k, i) => {
+        const cx = mg + (i % 2) * (cardW + 6)
+        const cy = y + Math.floor(i / 2) * (cardH + 5)
+        setFillColor('#ffffff')
+        setDrawColor('#e2e8f0')
+        pdf.setLineWidth(0.3)
+        pdf.roundedRect(cx, cy, cardW, cardH, 2, 2, 'FD')
+        setFillColor(k.accent)
+        pdf.rect(cx, cy, 3.5, cardH, 'F')
         pdf.setFont('helvetica', 'bold')
-        pdf.setFontSize(11)
+        pdf.setFontSize(6.5)
+        setColor(k.accent)
+        pdf.text(k.label, cx + 7, cy + 9)
+        pdf.setFontSize(17)
         setColor('#1e293b')
-        pdf.text('Visitas ao site', margin, y)
-        y += 4
+        pdf.text(k.value, cx + 7, cy + 20)
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(6.5)
+        setColor('#64748b')
+        pdf.text(pdf.splitTextToSize(k.desc, cardW - 11), cx + 7, cy + 25.5)
+      })
+      y += 2 * (cardH + 5) + 8
+
+      // ── PÁGINAS MAIS VISITADAS ──────────────────────────
+      if (gcReport.topHits.length > 0) {
+        checkPage(55)
+        setFillColor(A)
+        pdf.rect(mg, y, 3.5, 9, 'F')
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(10.5)
+        setColor('#1e293b')
+        pdf.text('Páginas mais visitadas', mg + 7, y + 6.5)
+        y += 12
         pdf.setFont('helvetica', 'normal')
         pdf.setFontSize(7.5)
         setColor('#64748b')
-        const gcIntroLines = pdf.splitTextToSize(
-          'Dados do GoatCounter: quem realmente visitou seu site, de onde veio e quais páginas acessou.',
-          contentW
-        )
-        pdf.text(gcIntroLines, margin, y)
-        y += gcIntroLines.length * 4 + 6
+        pdf.text('Caminhos que receberam mais acessos no período.', mg, y)
+        y += 7
 
-        // GC KPI Cards
-        const gcCardW = (contentW - 6) / 2
-        const gcCardH = 28
-        const gcKpis = [
-          { label: 'PAGEVIEWS', value: formatNumber(gcReport.summary.pageviews), desc: 'Total de páginas visualizadas', bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
-          { label: 'VISITANTES ÚNICOS', value: formatNumber(gcReport.summary.unique), desc: 'Pessoas distintas que visitaram o site', bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8' },
-        ]
-        gcKpis.forEach((kpi, i) => {
-          const cx = margin + i * (gcCardW + 6)
-          const cy = y
-          setFillColor(kpi.bg)
-          setDrawColor(kpi.border)
-          pdf.roundedRect(cx, cy, gcCardW, gcCardH, 2, 2, 'FD')
-          pdf.setFont('helvetica', 'normal')
-          pdf.setFontSize(7)
-          setColor(kpi.text)
-          pdf.text(kpi.label, cx + 4, cy + 6)
-          pdf.setFont('helvetica', 'bold')
-          pdf.setFontSize(16)
-          pdf.text(kpi.value, cx + 4, cy + 15)
-          pdf.setFont('helvetica', 'normal')
-          pdf.setFontSize(6.5)
-          setColor('#64748b')
-          const descLines = pdf.splitTextToSize(kpi.desc, gcCardW - 8)
-          pdf.text(descLines, cx + 4, cy + 21)
-        })
-        y += gcCardH + 10
-
-        // GC Top Pages
-        if (gcReport.topHits.length > 0) {
-          checkPage(40)
-          pdf.setFont('helvetica', 'bold')
-          pdf.setFontSize(10)
-          setColor('#1e293b')
-          pdf.text('Páginas mais visitadas', margin, y)
-          y += 4
-          pdf.setFont('helvetica', 'normal')
-          pdf.setFontSize(7.5)
-          setColor('#64748b')
-          pdf.text('Caminhos do site que receberam mais acessos diretos no período.', margin, y)
-          y += 6
-
-          setFillColor('#f8fafc')
-          setDrawColor('#e2e8f0')
-          pdf.roundedRect(margin, y, contentW, 7, 1, 1, 'FD')
-          pdf.setFont('helvetica', 'bold')
-          pdf.setFontSize(7)
-          setColor('#64748b')
-          pdf.text('#', margin + 3, y + 5)
-          pdf.text('Página', margin + 12, y + 5)
-          pdf.text('Visitas', W - margin - 25, y + 5, { align: 'right' })
-          pdf.text('Únicos', W - margin - 3, y + 5, { align: 'right' })
-          y += 8
-
-          gcReport.topHits.forEach((h, i) => {
-            checkPage(7)
-            if (i % 2 === 1) {
-              setFillColor('#f8fafc')
-              pdf.rect(margin, y - 1, contentW, 7, 'F')
-            }
-            const displayPath = h.path === '/' ? 'Página inicial' : (h.path.length > 45 ? h.path.slice(0, 45) + '…' : h.path)
-            pdf.setFont('helvetica', 'normal')
-            pdf.setFontSize(8)
-            setColor('#94a3b8')
-            pdf.text(`${i + 1}`, margin + 3, y + 4)
-            setColor('#334155')
-            pdf.setFont('helvetica', 'bold')
-            pdf.text(displayPath, margin + 12, y + 4)
-            pdf.setFont('helvetica', 'normal')
-            setColor('#15803d')
-            pdf.text(formatNumber(h.count), W - margin - 25, y + 4, { align: 'right' })
-            setColor('#64748b')
-            pdf.text(formatNumber(h.countUnique), W - margin - 3, y + 4, { align: 'right' })
-            y += 7
-          })
-          y += 8
-        }
-
-        // GC Top Referrers
-        if (gcReport.topRefs.length > 0) {
-          checkPage(40)
-          pdf.setFont('helvetica', 'bold')
-          pdf.setFontSize(10)
-          setColor('#1e293b')
-          pdf.text('De onde vieram as visitas', margin, y)
-          y += 4
-          pdf.setFont('helvetica', 'normal')
-          pdf.setFontSize(7.5)
-          setColor('#64748b')
-          pdf.text('Sites e fontes que mais trouxeram visitantes.', margin, y)
-          y += 6
-
-          setFillColor('#f8fafc')
-          setDrawColor('#e2e8f0')
-          pdf.roundedRect(margin, y, contentW, 7, 1, 1, 'FD')
-          pdf.setFont('helvetica', 'bold')
-          pdf.setFontSize(7)
-          setColor('#64748b')
-          pdf.text('#', margin + 3, y + 5)
-          pdf.text('Origem', margin + 12, y + 5)
-          pdf.text('Visitas', W - margin - 3, y + 5, { align: 'right' })
-          y += 8
-
-          gcReport.topRefs.forEach((r, i) => {
-            checkPage(7)
-            if (i % 2 === 1) {
-              setFillColor('#f8fafc')
-              pdf.rect(margin, y - 1, contentW, 7, 'F')
-            }
-            const displayRef = r.ref.length > 55 ? r.ref.slice(0, 55) + '…' : r.ref
-            pdf.setFont('helvetica', 'normal')
-            pdf.setFontSize(8)
-            setColor('#94a3b8')
-            pdf.text(`${i + 1}`, margin + 3, y + 4)
-            setColor('#334155')
-            pdf.setFont('helvetica', 'bold')
-            pdf.text(displayRef, margin + 12, y + 4)
-            pdf.setFont('helvetica', 'normal')
-            setColor('#7e22ce')
-            pdf.text(formatNumber(r.count), W - margin - 3, y + 4, { align: 'right' })
-            y += 7
-          })
-          y += 8
-        }
-
-        // GC summary tip
-        checkPage(20)
-        setFillColor('#f0fdf4')
-        setDrawColor('#bbf7d0')
-        const gcTipText = gcReport.summary.pageviews > 0
-          ? `No período, ${formatNumber(gcReport.summary.unique)} visitantes únicos geraram ${formatNumber(gcReport.summary.pageviews)} visualizações de página. A origem principal foi: ${gcReport.summary.topRef}.`
-          : 'Ainda não há dados de visitas para este período. Aguarde alguns dias após a publicação do site.'
-        const gcTipLines = pdf.splitTextToSize(gcTipText, contentW - 10)
-        const gcTipH = gcTipLines.length * 4 + 12
-        pdf.roundedRect(margin, y, contentW, gcTipH, 2, 2, 'FD')
+        setFillColor(A)
+        pdf.roundedRect(mg, y, cW, 8, 1, 1, 'F')
         pdf.setFont('helvetica', 'bold')
-        pdf.setFontSize(8)
-        setColor('#15803d')
-        pdf.text('O que esses números significam?', margin + 5, y + 6)
-        pdf.setFont('helvetica', 'normal')
-        pdf.setFontSize(7.5)
-        setColor('#14532d')
-        pdf.text(gcTipLines, margin + 5, y + 12)
-        y += gcTipH + 12
+        pdf.setFontSize(7)
+        pdf.setTextColor(255, 255, 255)
+        pdf.text('#', mg + 3, y + 5.5)
+        pdf.text('Página', mg + 12, y + 5.5)
+        pdf.text('Visitas', W - mg - 24, y + 5.5, { align: 'right' })
+        pdf.text('Únicos', W - mg - 3, y + 5.5, { align: 'right' })
+        y += 9
+
+        const maxH = gcReport.topHits[0]?.count || 1
+        const BAR_WH = 18, BAR_RH = W - mg - 28
+
+        gcReport.topHits.forEach((h, i) => {
+          checkPage(8)
+          if (i % 2 === 0) {
+            setFillColor('#f0fdf4')
+            pdf.rect(mg, y - 0.5, cW, 7.5, 'F')
+          }
+          const displayPath = h.path === '/' ? 'Página inicial' : (h.path.length > 40 ? h.path.slice(0, 40) + '…' : h.path)
+          pdf.setFont('helvetica', 'normal')
+          pdf.setFontSize(8)
+          setColor('#94a3b8')
+          pdf.text(`${i + 1}`, mg + 3, y + 5)
+          setColor('#334155')
+          pdf.setFont('helvetica', 'bold')
+          pdf.text(displayPath, mg + 12, y + 5)
+          const barW = Math.max(1.5, (h.count / maxH) * BAR_WH)
+          setFillColor('#d1fae5')
+          pdf.rect(BAR_RH - BAR_WH, y + 1.5, BAR_WH, 3.5, 'F')
+          setFillColor(A)
+          pdf.rect(BAR_RH - BAR_WH, y + 1.5, barW, 3.5, 'F')
+          pdf.setFont('helvetica', 'normal')
+          pdf.setFontSize(7.5)
+          setColor(A)
+          pdf.text(formatNumber(h.count), W - mg - 24, y + 5, { align: 'right' })
+          setColor('#64748b')
+          pdf.text(formatNumber(h.countUnique), W - mg - 3, y + 5, { align: 'right' })
+          y += 7.5
+        })
+        y += 8
       }
 
-      // Footer
-      if (y + 15 > 280) { pdf.addPage(); y = margin }
-      setDrawColor('#f1f5f9')
-      pdf.line(margin, y, W - margin, y)
-      y += 5
-      pdf.setFontSize(7)
-      setColor('#94a3b8')
-      pdf.text(`Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} — Dados: GoatCounter`, W / 2, y, { align: 'center' })
+      // ── DE ONDE VIERAM ──────────────────────────────────
+      if (gcReport.topRefs.length > 0) {
+        checkPage(55)
+        setFillColor(A)
+        pdf.rect(mg, y, 3.5, 9, 'F')
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(10.5)
+        setColor('#1e293b')
+        pdf.text('De onde vieram as visitas', mg + 7, y + 6.5)
+        y += 12
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(7.5)
+        setColor('#64748b')
+        pdf.text('Sites e fontes que mais trouxeram visitantes.', mg, y)
+        y += 7
+
+        setFillColor(A)
+        pdf.roundedRect(mg, y, cW, 8, 1, 1, 'F')
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(7)
+        pdf.setTextColor(255, 255, 255)
+        pdf.text('#', mg + 3, y + 5.5)
+        pdf.text('Origem', mg + 12, y + 5.5)
+        pdf.text('Visitas', W - mg - 3, y + 5.5, { align: 'right' })
+        y += 9
+
+        const maxR = gcReport.topRefs[0]?.count || 1
+        const BAR_WR = 22, BAR_RR = W - mg - 26
+
+        gcReport.topRefs.forEach((r, i) => {
+          checkPage(8)
+          if (i % 2 === 0) {
+            setFillColor('#f0fdf4')
+            pdf.rect(mg, y - 0.5, cW, 7.5, 'F')
+          }
+          const displayRef = r.ref.length > 50 ? r.ref.slice(0, 50) + '…' : r.ref
+          pdf.setFont('helvetica', 'normal')
+          pdf.setFontSize(8)
+          setColor('#94a3b8')
+          pdf.text(`${i + 1}`, mg + 3, y + 5)
+          setColor('#334155')
+          pdf.setFont('helvetica', 'bold')
+          pdf.text(displayRef, mg + 12, y + 5)
+          const barW = Math.max(1.5, (r.count / maxR) * BAR_WR)
+          setFillColor('#d1fae5')
+          pdf.rect(BAR_RR - BAR_WR, y + 1.5, BAR_WR, 3.5, 'F')
+          setFillColor(A)
+          pdf.rect(BAR_RR - BAR_WR, y + 1.5, barW, 3.5, 'F')
+          pdf.setFont('helvetica', 'normal')
+          pdf.setFontSize(7.5)
+          setColor(A)
+          pdf.text(formatNumber(r.count), W - mg - 3, y + 5, { align: 'right' })
+          y += 7.5
+        })
+        y += 8
+      }
+
+      // ── ANÁLISE DO PERÍODO ──────────────────────────────
+      checkPage(30)
+      const gcTipText = gcReport.summary.pageviews > 0
+        ? `${formatNumber(gcReport.summary.unique)} visitantes únicos geraram ${formatNumber(gcReport.summary.pageviews)} visualizações neste período. A principal origem de tráfego foi: ${gcReport.summary.topRef}. Dados coletados de forma cookieless, respeitando a privacidade dos visitantes.`
+        : 'Ainda não há dados de visitas para este período. Aguarde alguns dias após a publicação do site para que os dados comecem a aparecer.'
+      const gcTipLines = pdf.splitTextToSize(gcTipText, cW - 16)
+      const gcTipH = gcTipLines.length * 4.5 + 16
+      setFillColor(AL)
+      setDrawColor('#6ee7b7')
+      pdf.setLineWidth(0.3)
+      pdf.roundedRect(mg, y, cW, gcTipH, 2, 2, 'FD')
+      setFillColor(A)
+      pdf.rect(mg, y, 3.5, gcTipH, 'F')
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(8)
+      setColor(A)
+      pdf.text('Análise do período', mg + 7, y + 7)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(7.5)
+      setColor('#065f46')
+      pdf.text(gcTipLines, mg + 7, y + 13)
+
+      // ── RODAPÉ (todas as páginas) ───────────────────────
+      const totalPages = pdf.internal.pages.length - 1
+      for (let pg = 1; pg <= totalPages; pg++) {
+        pdf.setPage(pg)
+        setFillColor(A)
+        pdf.rect(0, H - 12, W, 12, 'F')
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(7)
+        pdf.setTextColor(255, 255, 255)
+        pdf.text('SartoriaLab', mg, H - 5)
+        pdf.setFont('helvetica', 'normal')
+        pdf.setTextColor(167, 243, 208)
+        pdf.text(`Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} — GoatCounter Analytics`, mg + 23, H - 5)
+        pdf.setTextColor(255, 255, 255)
+        pdf.text(`${pg} / ${totalPages}`, W - mg, H - 5, { align: 'right' })
+      }
 
       pdf.save(`relatorio-visitas-${slug}-${new Date().toISOString().slice(0, 7)}.pdf`)
     } catch (err) {
@@ -620,160 +648,165 @@ export default function RelatorioSEOPage() {
     if (!report) return
     setExporting(true)
     try {
+      const A = '#4f46e5', AL = '#eef2ff'
+      const W = 210, H = 297, mg = 15, cW = W - mg * 2
+
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const W = 210
-      const margin = 15
-      const contentW = W - margin * 2
-      let y = margin
       const { setColor, setFillColor, setDrawColor } = createPdfHelpers(pdf)
-      const checkPage = (needed) => {
-        if (y + needed > 280) { pdf.addPage(); y = margin }
+      let y = 0
+
+      const checkPage = (need) => {
+        if (y + need > H - 14) { pdf.addPage(); y = mg }
       }
 
-      // Title
+      // ── HEADER BANNER ──────────────────────────────────
+      setFillColor(A)
+      pdf.rect(0, 0, W, 44, 'F')
+      setFillColor('#6366f1')
+      pdf.roundedRect(W - 52, -4, 56, 52, 8, 8, 'F')
+
       pdf.setFont('helvetica', 'bold')
-      pdf.setFontSize(18)
-      setColor('#1e293b')
-      pdf.text(restaurant.name, W / 2, y, { align: 'center' })
-      y += 8
+      pdf.setFontSize(20)
+      pdf.setTextColor(255, 255, 255)
+      pdf.text(restaurant.name, mg, 17)
 
       pdf.setFont('helvetica', 'normal')
-      pdf.setFontSize(11)
-      setColor('#64748b')
-      pdf.text('Relatório de Desempenho no Google', W / 2, y, { align: 'center' })
-      y += 6
+      pdf.setFontSize(10.5)
+      pdf.setTextColor(199, 210, 254)
+      pdf.text('Desempenho no Google — Search Console', mg, 27)
 
-      pdf.setFontSize(9)
-      setColor('#94a3b8')
-      pdf.text(`Período: ${formatDateBR(report.period.start)} a ${formatDateBR(report.period.end)}`, W / 2, y, { align: 'center' })
-      y += 10
+      pdf.setFontSize(8.5)
+      pdf.setTextColor(165, 180, 252)
+      pdf.text(`${formatDateBR(report.period.start)}  —  ${formatDateBR(report.period.end)}`, mg, 36)
 
-      setDrawColor('#e2e8f0')
-      pdf.line(margin, y, W - margin, y)
-      y += 8
-
-      // Intro
       pdf.setFont('helvetica', 'bold')
-      pdf.setFontSize(11)
-      setColor('#1e293b')
-      pdf.text('Como seu site apareceu no Google', margin, y)
-      y += 4
+      pdf.setFontSize(7)
+      pdf.setTextColor(255, 255, 255)
+      pdf.text('GOOGLE SEARCH CONSOLE', W - mg, 19, { align: 'right' })
       pdf.setFont('helvetica', 'normal')
-      pdf.setFontSize(7.5)
-      setColor('#64748b')
-      const gscIntroLines = pdf.splitTextToSize(
-        'Dados do Google Search Console: quantas vezes seu site apareceu nas pesquisas e em qual posição.',
-        contentW
-      )
-      pdf.text(gscIntroLines, margin, y)
-      y += gscIntroLines.length * 4 + 6
+      pdf.setFontSize(6.5)
+      pdf.setTextColor(199, 210, 254)
+      pdf.text('Relatório Mensal · SartoriaLab', W - mg, 26, { align: 'right' })
 
-      // KPI Cards
-      const cardW = (contentW - 6) / 2
-      const cardH = 28
-      const kpis = [
-        { label: 'IMPRESSÕES', value: formatNumber(report.summary.impressions), desc: 'Quantas vezes seu site apareceu no Google', bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
-        { label: 'POSIÇÃO MÉDIA', value: formatPosition(report.summary.position), desc: 'Posição média nos resultados. Posição 1 = primeiro resultado', bg: '#faf5ff', border: '#d8b4fe', text: '#7e22ce' },
-      ]
+      y = 55
 
-      kpis.forEach((kpi, i) => {
-        const cx = margin + i * (cardW + 6)
-        const cy = y
-        setFillColor(kpi.bg)
-        setDrawColor(kpi.border)
+      // ── KPI CARDS ──────────────────────────────────────
+      const cardW = (cW - 6) / 2, cardH = 32
+      ;[
+        { label: 'IMPRESSÕES', value: formatNumber(report.summary.impressions), desc: 'Vezes que seu site apareceu no Google', accent: A },
+        { label: 'POSIÇÃO MÉDIA', value: formatPosition(report.summary.position), desc: 'Quanto menor, melhor. Posição 1 = 1º resultado', accent: '#7c3aed' },
+      ].forEach((k, i) => {
+        const cx = mg + i * (cardW + 6), cy = y
+        setFillColor('#ffffff')
+        setDrawColor('#e2e8f0')
+        pdf.setLineWidth(0.3)
         pdf.roundedRect(cx, cy, cardW, cardH, 2, 2, 'FD')
-        pdf.setFont('helvetica', 'normal')
-        pdf.setFontSize(7)
-        setColor(kpi.text)
-        pdf.text(kpi.label, cx + 4, cy + 6)
+        setFillColor(k.accent)
+        pdf.rect(cx, cy, 3.5, cardH, 'F')
         pdf.setFont('helvetica', 'bold')
-        pdf.setFontSize(16)
-        pdf.text(kpi.value, cx + 4, cy + 15)
+        pdf.setFontSize(6.5)
+        setColor(k.accent)
+        pdf.text(k.label, cx + 7, cy + 9)
+        pdf.setFontSize(20)
+        setColor('#1e293b')
+        pdf.text(k.value, cx + 7, cy + 20)
         pdf.setFont('helvetica', 'normal')
         pdf.setFontSize(6.5)
         setColor('#64748b')
-        const descLines = pdf.splitTextToSize(kpi.desc, cardW - 8)
-        pdf.text(descLines, cx + 4, cy + 21)
+        pdf.text(pdf.splitTextToSize(k.desc, cardW - 11), cx + 7, cy + 26)
       })
-      y += cardH + 10
+      y += cardH + 12
 
-      // Top Queries table
+      // ── O QUE PESQUISARAM ──────────────────────────────
       if (report.topQueries.length > 0) {
-        checkPage(40)
+        checkPage(55)
+        setFillColor(A)
+        pdf.rect(mg, y, 3.5, 9, 'F')
         pdf.setFont('helvetica', 'bold')
-        pdf.setFontSize(10)
+        pdf.setFontSize(10.5)
         setColor('#1e293b')
-        pdf.text('O que as pessoas pesquisaram para te encontrar', margin, y)
-        y += 4
+        pdf.text('O que pesquisaram para te encontrar', mg + 7, y + 6.5)
+        y += 12
         pdf.setFont('helvetica', 'normal')
         pdf.setFontSize(7.5)
         setColor('#64748b')
-        pdf.text('Termos que as pessoas digitaram no Google e que fizeram seu site aparecer.', margin, y)
-        y += 6
+        pdf.text('Termos que fizeram seu site aparecer nos resultados do Google.', mg, y)
+        y += 7
 
-        setFillColor('#f8fafc')
-        setDrawColor('#e2e8f0')
-        pdf.roundedRect(margin, y, contentW, 7, 1, 1, 'FD')
+        setFillColor(A)
+        pdf.roundedRect(mg, y, cW, 8, 1, 1, 'F')
         pdf.setFont('helvetica', 'bold')
         pdf.setFontSize(7)
-        setColor('#64748b')
-        pdf.text('#', margin + 3, y + 5)
-        pdf.text('O que pesquisaram', margin + 12, y + 5)
-        pdf.text('Apareceu', W - margin - 3, y + 5, { align: 'right' })
-        y += 8
+        pdf.setTextColor(255, 255, 255)
+        pdf.text('#', mg + 3, y + 5.5)
+        pdf.text('Termo de busca', mg + 12, y + 5.5)
+        pdf.text('Apareceu', W - mg - 3, y + 5.5, { align: 'right' })
+        y += 9
+
+        const maxQ = report.topQueries[0]?.impressions || 1
+        const BAR_WQ = 22, BAR_RQ = W - mg - 26
 
         report.topQueries.forEach((q, i) => {
-          checkPage(7)
-          if (i % 2 === 1) {
-            setFillColor('#f8fafc')
-            pdf.rect(margin, y - 1, contentW, 7, 'F')
+          checkPage(8)
+          if (i % 2 === 0) {
+            setFillColor('#f5f3ff')
+            pdf.rect(mg, y - 0.5, cW, 7.5, 'F')
           }
           pdf.setFont('helvetica', 'normal')
           pdf.setFontSize(8)
           setColor('#94a3b8')
-          pdf.text(`${i + 1}`, margin + 3, y + 4)
+          pdf.text(`${i + 1}`, mg + 3, y + 5)
           setColor('#334155')
           pdf.setFont('helvetica', 'bold')
-          const queryText = q.query.length > 50 ? q.query.slice(0, 50) + '…' : q.query
-          pdf.text(queryText, margin + 12, y + 4)
+          pdf.text(q.query.length > 44 ? q.query.slice(0, 44) + '…' : q.query, mg + 12, y + 5)
+          const barW = Math.max(1.5, (q.impressions / maxQ) * BAR_WQ)
+          setFillColor('#e0e7ff')
+          pdf.rect(BAR_RQ - BAR_WQ, y + 1.5, BAR_WQ, 3.5, 'F')
+          setFillColor(A)
+          pdf.rect(BAR_RQ - BAR_WQ, y + 1.5, barW, 3.5, 'F')
           pdf.setFont('helvetica', 'normal')
-          setColor('#64748b')
-          pdf.text(formatNumber(q.impressions), W - margin - 3, y + 4, { align: 'right' })
-          y += 7
+          pdf.setFontSize(7.5)
+          setColor('#4f46e5')
+          pdf.text(formatNumber(q.impressions), W - mg - 3, y + 5, { align: 'right' })
+          y += 7.5
         })
         y += 8
       }
 
-      // Top Pages table (GSC)
+      // ── PÁGINAS NO GOOGLE ──────────────────────────────
       if (report.topPages.length > 0) {
-        checkPage(40)
+        checkPage(55)
+        setFillColor(A)
+        pdf.rect(mg, y, 3.5, 9, 'F')
         pdf.setFont('helvetica', 'bold')
-        pdf.setFontSize(10)
+        pdf.setFontSize(10.5)
         setColor('#1e293b')
-        pdf.text('Páginas que mais apareceram no Google', margin, y)
-        y += 4
+        pdf.text('Páginas que mais apareceram no Google', mg + 7, y + 6.5)
+        y += 12
         pdf.setFont('helvetica', 'normal')
         pdf.setFontSize(7.5)
         setColor('#64748b')
-        pdf.text('Páginas com mais aparições nos resultados de pesquisa.', margin, y)
-        y += 6
+        pdf.text('Páginas com mais aparições nos resultados de pesquisa.', mg, y)
+        y += 7
 
-        setFillColor('#f8fafc')
-        setDrawColor('#e2e8f0')
-        pdf.roundedRect(margin, y, contentW, 7, 1, 1, 'FD')
+        setFillColor(A)
+        pdf.roundedRect(mg, y, cW, 8, 1, 1, 'F')
         pdf.setFont('helvetica', 'bold')
         pdf.setFontSize(7)
-        setColor('#64748b')
-        pdf.text('#', margin + 3, y + 5)
-        pdf.text('Página', margin + 12, y + 5)
-        pdf.text('Apareceu', W - margin - 3, y + 5, { align: 'right' })
-        y += 8
+        pdf.setTextColor(255, 255, 255)
+        pdf.text('#', mg + 3, y + 5.5)
+        pdf.text('Página', mg + 12, y + 5.5)
+        pdf.text('Apareceu', W - mg - 3, y + 5.5, { align: 'right' })
+        y += 9
+
+        const maxP = report.topPages[0]?.impressions || 1
+        const BAR_WP = 22, BAR_RP = W - mg - 26
 
         report.topPages.forEach((p, i) => {
-          checkPage(7)
-          if (i % 2 === 1) {
-            setFillColor('#f8fafc')
-            pdf.rect(margin, y - 1, contentW, 7, 'F')
+          checkPage(8)
+          if (i % 2 === 0) {
+            setFillColor('#f5f3ff')
+            pdf.rect(mg, y - 0.5, cW, 7.5, 'F')
           }
           let displayUrl = p.page
           try { displayUrl = new URL(p.page).pathname } catch {}
@@ -783,46 +816,62 @@ export default function RelatorioSEOPage() {
           pdf.setFont('helvetica', 'normal')
           pdf.setFontSize(8)
           setColor('#94a3b8')
-          pdf.text(`${i + 1}`, margin + 3, y + 4)
+          pdf.text(`${i + 1}`, mg + 3, y + 5)
           setColor('#334155')
           pdf.setFont('helvetica', 'bold')
-          pdf.text(displayUrl, margin + 12, y + 4)
+          pdf.text(displayUrl, mg + 12, y + 5)
+          const barW = Math.max(1.5, (p.impressions / maxP) * BAR_WP)
+          setFillColor('#e0e7ff')
+          pdf.rect(BAR_RP - BAR_WP, y + 1.5, BAR_WP, 3.5, 'F')
+          setFillColor(A)
+          pdf.rect(BAR_RP - BAR_WP, y + 1.5, barW, 3.5, 'F')
           pdf.setFont('helvetica', 'normal')
-          setColor('#64748b')
-          pdf.text(formatNumber(p.impressions), W - margin - 3, y + 4, { align: 'right' })
-          y += 7
+          pdf.setFontSize(7.5)
+          setColor('#4f46e5')
+          pdf.text(formatNumber(p.impressions), W - mg - 3, y + 5, { align: 'right' })
+          y += 7.5
         })
         y += 8
       }
 
-      // GSC summary tip
-      checkPage(20)
-      setFillColor('#fffbeb')
-      setDrawColor('#fde68a')
+      // ── ANÁLISE DO PERÍODO ──────────────────────────────
+      checkPage(30)
       const tipText = report.summary.impressions > 0
-        ? `No período selecionado, seu site apareceu ${formatNumber(report.summary.impressions)} vezes nas pesquisas do Google. Posição média: ${formatPosition(report.summary.position)} (quanto menor, melhor).`
-        : 'Seu site ainda está começando a aparecer no Google. É normal levar algumas semanas para os resultados crescerem.'
-      const tipLines = pdf.splitTextToSize(tipText, contentW - 10)
-      const tipH = tipLines.length * 4 + 12
-      pdf.roundedRect(margin, y, contentW, tipH, 2, 2, 'FD')
+        ? `Seu site apareceu ${formatNumber(report.summary.impressions)} vezes nas pesquisas do Google neste período. A posição média ${formatPosition(report.summary.position)} indica onde você aparece nos resultados — quanto menor, mais destaque você tem.`
+        : 'Seu site está começando a ganhar visibilidade no Google. É normal levar algumas semanas para crescer. Continue mantendo o site atualizado!'
+      const tipLines = pdf.splitTextToSize(tipText, cW - 16)
+      const tipH = tipLines.length * 4.5 + 16
+      setFillColor(AL)
+      setDrawColor('#c7d2fe')
+      pdf.setLineWidth(0.3)
+      pdf.roundedRect(mg, y, cW, tipH, 2, 2, 'FD')
+      setFillColor(A)
+      pdf.rect(mg, y, 3.5, tipH, 'F')
       pdf.setFont('helvetica', 'bold')
       pdf.setFontSize(8)
-      setColor('#92400e')
-      pdf.text('O que significa posição média?', margin + 5, y + 6)
+      setColor(A)
+      pdf.text('Análise do período', mg + 7, y + 7)
       pdf.setFont('helvetica', 'normal')
       pdf.setFontSize(7.5)
-      setColor('#78350f')
-      pdf.text(tipLines, margin + 5, y + 12)
-      y += tipH + 12
+      setColor('#3730a3')
+      pdf.text(tipLines, mg + 7, y + 13)
 
-      // Footer
-      checkPage(15)
-      setDrawColor('#f1f5f9')
-      pdf.line(margin, y, W - margin, y)
-      y += 5
-      pdf.setFontSize(7)
-      setColor('#94a3b8')
-      pdf.text(`Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} — Dados: Google Search Console`, W / 2, y, { align: 'center' })
+      // ── RODAPÉ (todas as páginas) ───────────────────────
+      const totalPages = pdf.internal.pages.length - 1
+      for (let pg = 1; pg <= totalPages; pg++) {
+        pdf.setPage(pg)
+        setFillColor(A)
+        pdf.rect(0, H - 12, W, 12, 'F')
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(7)
+        pdf.setTextColor(255, 255, 255)
+        pdf.text('SartoriaLab', mg, H - 5)
+        pdf.setFont('helvetica', 'normal')
+        pdf.setTextColor(199, 210, 254)
+        pdf.text(`Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} — Google Search Console`, mg + 23, H - 5)
+        pdf.setTextColor(255, 255, 255)
+        pdf.text(`${pg} / ${totalPages}`, W - mg, H - 5, { align: 'right' })
+      }
 
       pdf.save(`relatorio-google-${slug}-${new Date().toISOString().slice(0, 7)}.pdf`)
     } catch (err) {
