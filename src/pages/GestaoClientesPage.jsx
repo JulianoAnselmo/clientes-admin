@@ -61,8 +61,11 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 
 function whatsappLink(phone, name, amount, paymentDay) {
   const msg = encodeURIComponent(
-    `Olá ${name}! Passando para lembrar que o boleto do seu site vence dia ${paymentDay}. ` +
-    `Valor: ${brl.format(amount)}. Qualquer dúvida estou à disposição! 😊`
+    `Olá, ${name}! 😊 Tudo bem?\n\n` +
+    `Passando para avisar que a mensalidade do seu site vence no dia *${paymentDay}*.\n\n` +
+    `💰 *Valor:* ${brl.format(amount)}\n` +
+    `🔑 *Chave Pix:* juliano-gema@hotmail.com\n\n` +
+    `Assim que realizar o pagamento, pode me avisar por aqui mesmo. Qualquer dúvida estou à disposição! 🙏`
   )
   const number = (phone || '').replace(/\D/g, '')
   return `https://wa.me/55${number}?text=${msg}`
