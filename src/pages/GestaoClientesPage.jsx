@@ -33,6 +33,18 @@ function daysUntilDomainRenewal(contract) {
   return Math.floor((renewal - new Date()) / 86400000)
 }
 
+function metricsReminderDue(contract) {
+  if (!contract || contract.status !== 'active') return false
+  const today = new Date()
+  const day = today.getDate()
+  const payDay = contract.paymentDay
+  const reminderDay = payDay === 1
+    ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+    : payDay - 1
+  if (day !== reminderDay) return false
+  return contract.lastMetricsSent !== currentMonth()
+}
+
 function contractMonthsRemaining(contract) {
   if (!contract?.contractEnd) return null
   const end = new Date(contract.contractEnd)
@@ -454,6 +466,15 @@ export default function GestaoClientesPage() {
     setSaving(false)
   }
 
+  async function markMetricsSent(slug) {
+    const month = currentMonth()
+    await setDoc(doc(db, 'contracts', slug), { lastMetricsSent: month }, { merge: true })
+    setContracts(prev => ({
+      ...prev,
+      [slug]: { ...prev[slug], lastMetricsSent: month }
+    }))
+  }
+
   async function handleMarkPaid(slug, month, paid) {
     const contract = contracts[slug]
     if (!contract) return
@@ -683,6 +704,16 @@ export default function GestaoClientesPage() {
                     )}
 
                     <div className="flex-1" />
+
+                    {hasContract && metricsReminderDue(c) && (
+                      <button
+                        onClick={() => markMetricsSent(r.slug)}
+                        title="Enviar métricas hoje"
+                        className="text-xs bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-200 w-8 h-8 rounded-lg transition flex items-center justify-center"
+                      >
+                        📊
+                      </button>
+                    )}
 
                     {hasContract && (
                       <a
