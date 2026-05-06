@@ -278,9 +278,15 @@ export function mergeCardapio(atual, novo) {
     } else {
       targetCat = resultado[match.tabIdx].categorias[match.catIdx];
     }
-    // Categoria nova OU categoria já existente mas vazia: trata como nova (Menudino é autoridade
-    // sobre quais itens pertencem a ela). Cobre estado broken onde sync anterior criou cat vazia.
-    const isNewCat = !match || (targetCat.itens || []).length === 0;
+    // Categoria nova OU sem nenhum item ativo: trata como nova (Menudino é autoridade
+    // sobre quais itens pertencem a ela). Cobre estado broken onde sync anterior criou cat
+    // vazia ou com items soft-deletados (ativo:false).
+    const itensAtivos = (targetCat.itens || []).filter(i => i && i.ativo !== false);
+    const isNewCat = !match || itensAtivos.length === 0;
+    // Se cat existia mas só tinha items inativos, limpa pra evitar duplicatas/lixo.
+    if (isNewCat && match) {
+      targetCat.itens = [];
+    }
 
     catNova.itens.forEach(itemNovo => {
       const itemKey = normalizar(itemNovo.nome);
@@ -309,7 +315,8 @@ export function mergeCardapio(atual, novo) {
   Object.keys(itensAtuaisPorNome).forEach(key => {
     if (vistosNoMenudino[key]) return;
     const info = itensAtuaisPorNome[key];
-    const ref = resultado[info.tabIdx].categorias[info.catIdx].itens[info.itemIdx];
+    const ref = (resultado[info.tabIdx]?.categorias[info.catIdx]?.itens || [])[info.itemIdx];
+    if (!ref) return; // pode ter sido removido pelo reset de cat broken
     if (ref.ativo !== false) {
       ref.ativo = false;
       stats.inativados++;
