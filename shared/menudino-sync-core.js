@@ -308,6 +308,8 @@ export function mergeCardapio(atual, novo) {
       if (itemNovo.imagem && itemNovo.imagem.length > 0) itemAtual.imagem = itemNovo.imagem;
       else if (itemAtual.imagem) stats.preservados_imagem++;
       itemAtual.nome = itemNovo.nome;
+      // Menudino é autoridade de disponibilidade: se o item veio na sync, força ativo:true.
+      itemAtual.ativo = true;
       stats.atualizados++;
     });
   });
