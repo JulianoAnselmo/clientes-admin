@@ -269,6 +269,7 @@ export function mergeCardapio(atual, novo) {
     const match = catsAtuaisPorTitulo[catKey];
     let targetCat;
 
+    const isNewCat = !match;
     if (!match) {
       stats.categorias_novas++;
       const abaIdx = escolherAbaParaCategoria(resultado, catNova.titulo);
@@ -284,7 +285,9 @@ export function mergeCardapio(atual, novo) {
       vistosNoMenudino[itemKey] = true;
 
       const info = itensAtuaisPorNome[itemKey];
-      if (!info) {
+      // Categoria nova: sempre adiciona os itens a ela, mesmo que já existam em outra categoria.
+      // Evita categorias criadas vazias quando os itens têm o mesmo nome na categoria antiga.
+      if (!info || isNewCat) {
         targetCat.itens.push(itemNovo);
         stats.adicionados++;
         return;
