@@ -269,7 +269,6 @@ export function mergeCardapio(atual, novo) {
     const match = catsAtuaisPorTitulo[catKey];
     let targetCat;
 
-    const isNewCat = !match;
     if (!match) {
       stats.categorias_novas++;
       const abaIdx = escolherAbaParaCategoria(resultado, catNova.titulo);
@@ -279,6 +278,9 @@ export function mergeCardapio(atual, novo) {
     } else {
       targetCat = resultado[match.tabIdx].categorias[match.catIdx];
     }
+    // Categoria nova OU categoria já existente mas vazia: trata como nova (Menudino é autoridade
+    // sobre quais itens pertencem a ela). Cobre estado broken onde sync anterior criou cat vazia.
+    const isNewCat = !match || (targetCat.itens || []).length === 0;
 
     catNova.itens.forEach(itemNovo => {
       const itemKey = normalizar(itemNovo.nome);
